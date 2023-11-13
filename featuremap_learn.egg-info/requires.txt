@@ -1,0 +1,11 @@
+numpy>=1.13
+scikit-learn>=0.16
+scipy>=0.19
+numba==0.57.1
+
+[plot]
+quasildr
+scanpy
+pandas
+matplotlib==3.5.1
+anndata

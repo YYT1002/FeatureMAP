@@ -1,0 +1,34 @@
+Metadata-Version: 2.1
+Name: featuremap-learn
+Version: 0.1.6
+Summary: FeatureMAP
+Home-page: https://github.com/YYT1002/FeatureMAP
+Maintainer: Yang Yang
+Maintainer-email: yangyangnwpu@gmail.com
+License: GPL
+Keywords: dimensionality reduction manifold feature
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)
+Classifier: Programming Language :: C
+Classifier: Programming Language :: Python
+Classifier: Topic :: Software Development
+Classifier: Topic :: Scientific/Engineering
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Unix
+Classifier: Operating System :: MacOS
+Classifier: Programming Language :: Python :: 3.9
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.13
+Requires-Dist: scikit-learn>=0.16
+Requires-Dist: scipy>=0.19
+Requires-Dist: numba==0.57.1
+Provides-Extra: plot
+Requires-Dist: quasildr; extra == "plot"
+Requires-Dist: scanpy; extra == "plot"
+Requires-Dist: pandas; extra == "plot"
+Requires-Dist: matplotlib==3.5.1; extra == "plot"
+Requires-Dist: anndata; extra == "plot"
+
+This software package contains an implementation of feature-preserving data visualization tool FeatureMAP.
