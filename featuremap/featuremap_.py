@@ -3041,9 +3041,9 @@ class FeatureMAP(BaseEstimator):
         self.fit(X, y)
         if self.transform_mode == "embedding":
             if self.output_feat:
-                return self.embedding_, self.rad_orig_, self.rad_emb_
+                return self.embedding_,  self.rad_orig_,  self.rad_emb_
             else:
-                return self.embedding_
+                return self.embedding_, self._featuremap_kwds['variation_embedding'], self._featuremap_kwds['gauge_v1_emb'], self._featuremap_kwds['gauge_v2_emb']
         elif self.transform_mode == "graph":
             return self.graph_
         else:
