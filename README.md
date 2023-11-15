@@ -42,8 +42,7 @@ Finally, install the package:
 Like UMAP, the densMAP package inherits from sklearn classes, and thus drops in neatly next to other sklearn transformers with an identical calling API.
 ```
 import featuremap
-from sklearn.datasets 
-import fetch_openml
+from sklearn.datasets import fetch_openml
 from sklearn.utils import resample
 
 digits = fetch_openml(name='mnist_784')
