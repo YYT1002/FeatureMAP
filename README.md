@@ -65,4 +65,4 @@ There are a number of parameters that can be set for the densMAP class; the majo
 
 Output includes the expression embedding, variation embeding, gauge embedding of 1st principal component, and gauge embedding of 2nd principal component, e.g.,
 
-`x_emb, v_emb, gauge_1_emb, gauge_2_emb = featuremap.featureMAP().fit_transform(subsample)`
+`x_emb, v_emb, gauge_1_emb, gauge_2_emb = featuremap.FeatureMAP().fit_transform(subsample)`
