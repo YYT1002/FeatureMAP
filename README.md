@@ -18,10 +18,10 @@ PyPI installation of FeatureMAP is performed as:
 
 For a manual install, first download this package:
 
-`wget https://github.com/YYT1002/FeatureMAP/archive/main.zip
+```wget https://github.com/YYT1002/FeatureMAP/archive/main.zip
 unzip FeatureMAP-main.zip
 rm FeatureMAP-main.zip
-cd FeatureMAP-main`
+cd FeatureMAP-main```
 
 Install the requirements:
 
