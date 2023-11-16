@@ -43,14 +43,15 @@ configuration = {
     'install_requires': ['numpy >= 1.13',
                          'scikit-learn >= 0.16',
                           'scipy >= 0.19',
-                         'numba == 0.57.1',
-                         "matplotlib == 3.5.1",],
+                         'numba >= 0.55.0',
+                         ],
     "extras_require": {
         "plot": [
             "quasildr",
             "scanpy",
             "pandas",
             "anndata",
+            "matplotlib == 3.5.1"
         ],
     
     }
