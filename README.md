@@ -9,9 +9,14 @@ FeatureMAP shares the same dependencies as UMAP, including:
 * scikit-learn
 * numba==0.57.1
 
+Other dependencies include:
+`conda install -c conda-forge scanpy python-igraph leidenalg`
+`conda install -c main -c conda-forge -c bioconda quasildr`
+
 # Install Options
 
 PyPI installation of FeatureMAP is performed as:
+
 
 `pip install featuremap-learn`
 
