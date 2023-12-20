@@ -11,6 +11,7 @@ FeatureMAP shares the same dependencies as UMAP, including:
 
 Other dependencies include:
 `conda install -c conda-forge scanpy python-igraph leidenalg`
+
 `conda install -c main -c conda-forge -c bioconda quasildr`
 
 # Install Options
