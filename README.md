@@ -13,6 +13,7 @@ Here is an example over one synthetic dataset with bifurcation model ([BEELINE](
 
 Besides the 2-dimensional visualization, it presents three core concepts:
 1. **Gene Contribution**: Estimating and projecting gene feature loadings.
+   ![Gene Contribution](./figures/gene_contribution.png)
 2. **Gene Variation Trajectory**: Tracking the differential expression and variation across states.
 3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
 
