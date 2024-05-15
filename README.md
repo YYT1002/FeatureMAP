@@ -6,7 +6,12 @@ Visualizing single-cell data is crucial for understanding cellular heterogeneity
 
 ## Description
 
-FeatureMAP introduces a novel approach by enhancing manifold learning with pairwise tangent space embedding, aiming to retain crucial aspects of cellular data. It presents three core concepts:
+FeatureMAP introduces a novel approach by enhancing manifold learning with pairwise tangent space embedding, aiming to retain crucial aspects of cellular data.
+We introduce two visualization by FeatureMAP: expression (GEX) and variation (GVA) embedding.
+Here is an example over one synthetic dataset with bifurcation model ([BEELINE](https://github.com/Murali-group/Beeline)):
+![Bifurcation Embedding](./figures/bifurcation_embedding.png)
+
+Besides the 2-dimensional visualization, it presents three core concepts:
 1. **Gene Contribution**: Estimating and projecting gene feature loadings.
 2. **Gene Variation Trajectory**: Tracking the differential expression and variation across states.
 3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
