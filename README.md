@@ -15,10 +15,9 @@ Besides the 2-dimensional visualization, it presents three core concepts:
 1. **Gene Contribution**: Estimating and projecting gene feature loadings.
    ![Gene Contribution](./figures/gene_contribution.png)
 2. **Gene Variation Trajectory**: Tracking the differential expression and variation across states.
-<img src="./figures/drawing.jpg" alt="drawing" width="200"/>
-   
-<iframe src="https://github.com/YYT1002/FeatureMAP/tree/main/figures/3d_plot.html" width="100%" height="500px"></iframe>
-1. **Core and Transition States**: Defined computationally through density-preserving capabilities.
+![Gene Variation Trajectory](./figures/gene_variation_trajectory.png){:height="80px" width="120px"}
+(Here is the ![3-D Plot](./figures/3d_plot.html))
+3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
 
 These enhancements allow for differential gene variation analysis, highlighting key regulatory genes that drive transitions between cellular states. Tested on both synthetic and real single-cell RNA sequencing (scRNA-seq) data, including studies on pancreatic development and T-cell exhaustion, FeatureMAP provides a more detailed understanding of cellular trajectories and regulatory mechanisms.
 
