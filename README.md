@@ -15,7 +15,7 @@ Besides the 2-dimensional visualization, it presents three core concepts:
 1. **Gene Contribution**: Estimating and projecting gene feature loadings.
    ![Gene Contribution](./figures/gene_contribution.png)
 2. **Gene Variation Trajectory**: Tracking the differential expression and variation across states.
-![Gene Variation Trajectory](./figures/gene_variation_trajectory.png){:height="400px" width="600px"}
+![Gene Variation Trajectory](./figures/gene_variation_trajectory.png){:height="80px" width="120px"}
 (Here is the ![3-D Plot](./figures/3d_plot.html))
 3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
 
