@@ -17,6 +17,8 @@ Besides the 2-dimensional visualization, it presents three core concepts:
 2. **Gene Variation Trajectory**: Tracking the differential expression and variation across states.
     ![Gene Variation Trajectory](./figures/gene_variation_trajectory.png)
     (Here is the ![3-D Plot](./figures/3d_plot.html))
+    [View 3D Plot](https://YYT1002.github.io/FeatureMAP/figures/3d_plot.html)
+
 3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
     ![Core and Transition States](./figures/core_trans_states.png)
    
