@@ -18,6 +18,8 @@ Besides the 2-dimensional visualization, it presents three core concepts:
     ![Gene Variation Trajectory](./figures/gene_variation_trajectory.png)
     (Here is the ![3-D Plot](./figures/3d_plot.html))
     [View 3D Plot](https://YYT1002.github.io/FeatureMAP/figures/3d_plot.html)
+    <iframe src="./figures/3d_plot.html" width="600" height="400"></iframe>
+
 
 3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
     ![Core and Transition States](./figures/core_trans_states.png)
