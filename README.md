@@ -8,18 +8,18 @@ Visualizing single-cell data is crucial for understanding cellular heterogeneity
 
 FeatureMAP introduces a novel approach by enhancing manifold learning with pairwise tangent space embedding, aiming to retain crucial aspects of cellular data.
 We introduce two visualization by FeatureMAP: expression (GEX) and variation (GVA) embedding.
-Here is an example over one synthetic dataset with bifurcation model ([BEELINE](https://github.com/Murali-group/Beeline)):
+Here is an example over one synthetic dataset ([BEELINE](https://github.com/Murali-group/Beeline)) with bifurcation model. Compared with UMAP, FeatureMAP-GEX better preserves density (similar to densMAP), and FeatureMAP-GVA shows trajectories.
 ![Bifurcation Embedding](./figures/bifurcation_embedding.png)
 
-Besides the 2-dimensional visualization, it presents three core concepts:
-1. **Gene Contribution**: Estimating and projecting gene feature loadings.
+Besides the 2-dimensional visualization, FeatureMAP presents three core concepts:
+1. **Gene Contribution**: Estimating and projecting gene feature loadings. The arrow represents the direction and magnitude of one gene's change. 
     ![Gene Contribution](./figures/gene_contribution.png)
-2. **Gene Variation Trajectory**: Tracking the differential expression and variation across states.
+
+2. **Gene Variation Trajectory**: Tracking the cell differentiation across states. There are clear paths (transition states) connecting cell states (core states) in a knot-and-thread way.
     ![Gene Variation Trajectory](./figures/gene_variation_trajectory.png)
     [View 3D Plot](https://YYT1002.github.io/FeatureMAP/figures/3d_plot.html)
    
-
-3. **Core and Transition States**: Defined computationally through density-preserving capabilities.
+3. **Core and Transition States**: Defined computationally through cell density and cell variation properties. Core states are cells with higher cell density and smaller cell variation, while transition states are lower cell density and larger cell variation.
     ![Core and Transition States](./figures/core_trans_states.png)
    
 
