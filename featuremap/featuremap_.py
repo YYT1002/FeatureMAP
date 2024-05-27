@@ -266,7 +266,15 @@ def tangent_space_approximation(
     graph_temp.data = np.ones_like(graph_temp.data)
     g = nx.Graph(graph_temp)
 
-    s_time_average = int(calculate_diameter(g) * 1.5)
+    # repeat several times to get the average diameter
+    s_time_average = 0
+    for i in range(3):
+        diameter = calculate_diameter(g)
+        print(f'Diameter is {diameter}')
+        s_time_average += int(diameter)
+    
+    s_time_average = int(s_time_average/3 * 1.5)
+    
     if featuremap_kwds['verbose']:
         print(ts() + f' Average over {s_time_average} times')
 

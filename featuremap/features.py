@@ -521,7 +521,7 @@ def feature_projection(
     # vh_smoothed = gauge_vh_original
 
     # gauge_u = adata.obsm['gauge_u'].copy()
-    singular_values_collection = adata.obsm['Singular_value'].copy()
+    # singular_values_collection = adata.obsm['Singular_value'].copy()
     svd_vh = adata.varm['svd_vh'].copy().T
 
     # Compute the gene norm in top k PCs (norm of the arrow in biplot)
