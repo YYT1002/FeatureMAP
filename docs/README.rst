@@ -1,4 +1,4 @@
-.. figure:: ./figures/featureMAP.png
+.. figure:: ../figures/featureMAP.png
    :alt: FeatureMAP Illustration
 
    FeatureMAP Illustration
@@ -135,7 +135,7 @@ Acknowledgments
 Thanks to the researchers and developers who provided insights and code
 snippets, including:
 
-.. |Bifurcation Embedding| image:: ./figures/bifurcation_embedding.png
-.. |Gene Contribution| image:: ./figures/gene_contribution.png
-.. |Gene Variation Trajectory| image:: ./figures/gene_variation_trajectory.png
-.. |Core and Transition States| image:: ./figures/core_trans_states.png
+.. |Bifurcation Embedding| image:: ../figures/bifurcation_embedding.png
+.. |Gene Contribution| image:: ../figures/gene_contribution.png
+.. |Gene Variation Trajectory| image:: ../figures/gene_variation_trajectory.png
+.. |Core and Transition States| image:: ../figures/core_trans_states.png
