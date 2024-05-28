@@ -1,8 +1,6 @@
 Overview
 --------
 
-|overview|
-
 .. image:: ../figures/featureMAP.png
    :alt: FeatureMAP Illustration
 
