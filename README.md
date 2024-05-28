@@ -39,7 +39,7 @@ These enhancements allow for differential gene variation analysis, highlighting 
 ### 1. Install directly using pip:
 
 ```bash
-pip install featuremap-package
+pip install featuremap
 ```
 
 ### 2. Installation via Conda
@@ -48,20 +48,29 @@ For users who prefer using Conda, especially for managing complex dependencies a
 ## How to use FeatureMAP
 
 ### Data Visualization
-For data vis, similar to UMAP
+For data visualization, FeatureMAP introduces expression embedding and variation embedding:
+```
+import featuremap:
+from sklearn.datasets import fetch_openml
+from sklearn.utils import resample
+
+digits = fetch_openml(name='mnist_784')
+subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000, stratify=digits.target, random_state=1)
+
+x_emb = featuremap.featureMAP().fit_transform(subsample)
+v_emb = featuremap.featureMAP(output_variation=True).fit_transform(subsample)
+
 ```
 
-```
+#### Parameters:
+output_variation: bool (False by default). Decide to generate expression embedding or variation embedding.
 
-Parameters
-Outputs
+#### Outputs
+x_emb: expession embedding to show the clustering
 
-### Gene Contribution
+v_emb: variation embedding to show the trajectory
 
-### Gene Trajectory Visualization
-
-### Core and Transition States
-
+The tutorial is ??????
 
 ## Example data and plots
 
