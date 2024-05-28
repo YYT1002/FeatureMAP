@@ -5,8 +5,7 @@ Overview
    :alt: FeatureMAP Illustration
 
 FeatureMAP: Feature-preserving Manifold Approximation and Projection
-===================================================================
-
+--------------------------------------------------------------------
 Visualizing single-cell data is crucial for understanding cellular heterogeneity and dynamics. Traditional methods like UMAP and t-SNE are effective for clustering but often miss critical gene information. FeatureMAP innovatively combines UMAP and PCA concepts to preserve both clustering structures and gene feature variations within a low-dimensional space.
 
 Description
@@ -66,7 +65,7 @@ How to use FeatureMAP
 ---------------------
 
 Data Visualization
-~~~~~~~~~~~~~~~~~~
+------------------
 
 For data vis, similar to UMAP
 
@@ -86,25 +85,25 @@ Core and Transition States
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Example data and plots
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Documentation
-~~~~~~~~~~~~~
+-------------
 
 Citation
-~~~~~~~~
+--------
 
 Our FeatureMAP algorithm is 
 
 License
-~~~~~~~
+-------
 
 The FeatureMAP package is under BSD-3-Clause license.
 
 Contact
-~~~~~~~
+-------
 
 Acknowledgments
-~~~~~~~~~~~~~~~
+----------------
 
 Thanks to the researchers and developers who provided insights and code snippets, including:
