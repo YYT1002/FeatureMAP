@@ -270,7 +270,7 @@ def tangent_space_approximation(
     s_time_average = 0
     for i in range(3):
         diameter = calculate_diameter(g)
-        print(f'Diameter is {diameter}')
+        # print(f'Diameter is {diameter}')
         s_time_average += int(diameter)
     
     s_time_average = int(s_time_average/3 * 1.5)
