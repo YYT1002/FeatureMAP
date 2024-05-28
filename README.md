@@ -39,7 +39,7 @@ These enhancements allow for differential gene variation analysis, highlighting 
 ### 1. Install directly using pip:
 
 ```bash
-pip install featuremap
+pip install featuremap-learn
 ```
 
 ### 2. Installation via Conda
@@ -50,7 +50,7 @@ For users who prefer using Conda, especially for managing complex dependencies a
 ### Data Visualization
 For data visualization, FeatureMAP introduces expression embedding and variation embedding:
 ```
-import featuremap:
+import featuremap
 from sklearn.datasets import fetch_openml
 from sklearn.utils import resample
 
