@@ -26,6 +26,19 @@ extensions = [
 ]
 
 autoapi_dirs = ['../featuremap']
+autoapi_ignore = ['*/tests/*']
+
+# conf.py
+autoapi_options = [
+    'members',
+    'undoc-members',
+    'show-inheritance',
+    'show-module-summary',
+    'special-members',
+    'imported-members',
+]
+
+autoapi_root = 'autoapi'
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
@@ -41,5 +54,3 @@ html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
-
-autoapi_root = 'autoapi'
