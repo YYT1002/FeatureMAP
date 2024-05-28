@@ -2,7 +2,7 @@
    :hidden:   
    :maxdepth: 1
 
-    README
+    README.rst
 
 
 .. toctree::
