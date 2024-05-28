@@ -2,9 +2,9 @@
 
 # -- Project information
 
-project = 'Lumache'
-copyright = '2021, Graziella'
-author = 'Graziella'
+project = 'FeatureMap'
+copyright = '2024, Yang Yang'
+author = 'Yang Yang'
 
 release = '0.1'
 version = '0.1.0'
