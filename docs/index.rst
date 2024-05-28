@@ -1,11 +1,11 @@
 .. include:: ../README.md
-    :parser:myst_parse.sphinx_
+   :parser: myst_parser.sphinx_
 
 .. toctree::
    :hidden:   
    :maxdepth: 1
 
-   README.md
+   ../README.md
 
 .. toctree::
    :hidden:
