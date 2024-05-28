@@ -21,8 +21,11 @@ extensions = [
     "nbsphinx",
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
-    "myst_parser"
+    "myst_parser",
+    "autoapi.extension"
 ]
+
+autoapi_dirs = ['../featuremap']
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
@@ -38,3 +41,5 @@ html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+autoapi_root = 'autoapi'
