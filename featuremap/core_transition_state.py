@@ -193,7 +193,7 @@ def core_transition_state(
         # adata.obs.loc[adata.obs_names[corestates_nn_points], 'corestates_nn_points'] = cluster
     
     adata.obs['corestates'] = df_temp['corestates']
-    adata.obs['corestates'] = pd.Categorical(adata.obs['corestates'], categories=adata.obs['clusters'].cat.categories, ordered=True)
+    adata.obs['corestates'] = pd.Categorical(adata.obs['corestates'], categories=adata.obs[cluster_key].cat.categories, ordered=True)
 
     sc.pl.embedding(adata, emb, color=['corestates'],)
  
