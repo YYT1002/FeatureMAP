@@ -2,12 +2,6 @@
    :parser: myst_parser.sphinx_
 
 .. toctree::
-   :hidden:   
-   :maxdepth: 1
-
-   ../README.md
-
-.. toctree::
    :hidden:
    :maxdepth: 1
    :caption: Tutorial:
