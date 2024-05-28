@@ -4,5 +4,5 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "featuremap"
-authors = [{name = "Test", email = "uqachoo1@uq.edu.au"}]
+authors = [{name = "Test", email = ""}]
 dynamic = ["version", "description"]

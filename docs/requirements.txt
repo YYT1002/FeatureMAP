@@ -2,3 +2,4 @@ sphinx-rtd-theme
 nbsphinx
 sphinx_autodoc_typehints
 sphinx_autodoc_defaultargs
+myst-parser

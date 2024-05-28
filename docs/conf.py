@@ -21,6 +21,7 @@ extensions = [
     "nbsphinx",
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
+    "myst_parser"
 ]
 
 intersphinx_mapping = {
