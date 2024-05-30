@@ -12,6 +12,7 @@ Here is an example over one synthetic dataset ([BEELINE](https://github.com/Mura
 ![Bifurcation Embedding](./figures/bifurcation_embedding.png)
 
 Besides the two-dimensional visualization, FeatureMAP presents three core concepts:
+
 1. **Gene Contribution**: Estimating and projecting gene feature loadings. The arrow represents the direction and magnitude of one gene's change. 
     ![Gene Contribution](./figures/gene_contribution.png)
 
@@ -73,22 +74,15 @@ x_emb: expession embedding to show the clustering
 
 v_emb: variation embedding to show the trajectory
 
-The tutorial is ??????
-
-## Example data and plots
-
 
 ## Documentation
+More tutorials are at https://featuremap.readthedocs.io/en/latest/index.html.
 
 ## Citation
-Our FeatureMAP alogrithm is 
+Our FeatureMAP alogrithm is based on the paper
 
+Yang, Yang, et al. "Interpretable Dimensionality Reduction by Feature Preserving Manifold Approximation and Projection." arXiv preprint arXiv:2211.09321 (2022).
 
 ## License
 The FeatureMAP package is under BSD-3-Clause license.
-
-## Contact
-
-### Acknowledgments
-Thanks to the researchers and developers who provided insights and code snippets, including:
 
