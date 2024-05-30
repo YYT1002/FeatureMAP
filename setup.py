@@ -15,7 +15,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
     
 configuration = {
-    'name' : 'featuremap',
+    'name' : 'featuremap-learn',
     'version': '1.0.0',
     'description' : 'FeatureMAP',
     'long_description' : long_description,
