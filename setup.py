@@ -44,6 +44,7 @@ configuration = {
                          'scikit-learn >= 0.16',
                           'scipy >= 0.19',
                          'numba >= 0.55.0',
+                         'umap-learn >= 0.5.1',
                          ],
     "extras_require": {
         "plot": [
