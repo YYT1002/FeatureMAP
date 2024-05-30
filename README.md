@@ -3,15 +3,15 @@
 # FeatureMAP: Feature-preserving Manifold Approximation and Projection
 
 Visualizing single-cell data is crucial for understanding cellular heterogeneity and dynamics. Traditional methods like UMAP and t-SNE are effective for clustering but often miss critical gene information. FeatureMAP innovatively combines UMAP and PCA concepts to preserve both clustering structures and gene feature variations within a low-dimensional space.
-Z
+
 ## Description
 
 FeatureMAP introduces a novel approach by enhancing manifold learning with pairwise tangent space embedding, aiming to retain crucial aspects of cellular data.
-We introduce two visualization by FeatureMAP: expression (GEX) and variation (GVA) embedding.
-Here is an example over one synthetic dataset ([BEELINE](https://github.com/Murali-group/Beeline)) with bifurcation model. Compared with UMAP, FeatureMAP-GEX better preserves density (similar to densMAP), and FeatureMAP-GVA shows trajectories.
+We introduce two visualization plots by FeatureMAP: expression (GEX) and variation (GVA) embedding.
+Here is an example over one synthetic dataset ([BEELINE](https://github.com/Murali-group/Beeline)) with a bifurcation model. Compared with UMAP, FeatureMAP-GEX better preserves density, and FeatureMAP-GVA shows trajectories.
 ![Bifurcation Embedding](./figures/bifurcation_embedding.png)
 
-Besides the 2-dimensional visualization, FeatureMAP presents three core concepts:
+Besides the two-dimensional visualization, FeatureMAP presents three core concepts:
 1. **Gene Contribution**: Estimating and projecting gene feature loadings. The arrow represents the direction and magnitude of one gene's change. 
     ![Gene Contribution](./figures/gene_contribution.png)
 
@@ -23,7 +23,7 @@ Besides the 2-dimensional visualization, FeatureMAP presents three core concepts
     ![Core and Transition States](./figures/core_trans_states.png)
    
 
-These enhancements allow for differential gene variation analysis, highlighting key regulatory genes that drive transitions between cellular states. Tested on both synthetic and real single-cell RNA sequencing (scRNA-seq) data, including studies on pancreatic development and T-cell exhaustion, FeatureMAP provides a more detailed understanding of cellular trajectories and regulatory mechanisms.
+These enhancements allow for differential gene variation (DGV) analysis, highlighting key regulatory genes that drive transitions between cellular states. Tested on both synthetic and real single-cell RNA sequencing (scRNA-seq) data, including studies on pancreatic development and T-cell exhaustion (Tutorials in ??), FeatureMAP provides a more detailed understanding of cellular trajectories and regulatory mechanisms.
 
 
 ## Getting Started
@@ -44,11 +44,14 @@ pip install featuremap-learn
 
 ### 2. Installation via Conda
 For users who prefer using Conda, especially for managing complex dependencies and environments in scientific computing.
+```
+conda install ???
+```
 
 ## How to use FeatureMAP
 
 ### Data Visualization
-For data visualization, FeatureMAP introduces expression embedding and variation embedding:
+For data visualization, FeatureMAP introduces expression embedding and variation embedding. Here is one example by MNIST datasets.
 ```
 import featuremap
 from sklearn.datasets import fetch_openml
@@ -63,7 +66,7 @@ v_emb = featuremap.featureMAP(output_variation=True).fit_transform(subsample)
 ```
 
 #### Parameters:
-output_variation: bool (False by default). Decide to generate expression embedding or variation embedding.
+output_variation: bool (False by default). Decide to generate expression embedding or variation embedding. 
 
 #### Outputs
 x_emb: expession embedding to show the clustering
