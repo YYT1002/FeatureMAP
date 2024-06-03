@@ -13,6 +13,8 @@
    :caption: Tutorial:
 
    notebooks/test_github_pancreas.ipynb
+   notebooks/test_github.ipynb
+
 
 .. toctree::
    :hidden:
