@@ -141,11 +141,6 @@ def plot_gauge(
         ):
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
-    # rotational_matrix = adata.uns['emb_umap']._densmap_kwds['VH_embedding']
-    # rotational_matrix = adata.obsm['VH_embedding']
-    # r_emb = adata.obsm['rad_emb_no_log']
-    # s = Scms(X_emb, 0.5, min_radius=5)
-
     # X_emb=adata.obsm[embedding]
     V_emb=adata.obsm[vkey] 
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
@@ -227,11 +222,6 @@ def plot_gauge_both(
         ):
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
-    # rotational_matrix = adata.uns['emb_umap']._densmap_kwds['VH_embedding']
-    # rotational_matrix = adata.obsm['VH_embedding']
-    # r_emb = adata.obsm['rad_emb_no_log']
-    # s = Scms(X_emb, 0.5, min_radius=5)
-
     # X_emb=adata.obsm[embedding]
     vkey='gauge_v1_emb'
     V_emb=adata.obsm[vkey] 
@@ -605,10 +595,6 @@ def plot_feature(
 
     # Set grid as the support
     X_emb=adata.obsm[embedding]
-    # rotational_matrix = adata.uns['emb_umap']._densmap_kwds['VH_embedding']
-    # rotational_matrix = adata.obsm['VH_embedding']
-    # r_emb = adata.obsm['rad_emb_no_log']
-    # s = Scms(X_emb, 0.5, min_radius=5)
     
     V_emb=adata.obsm[vkey] 
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
@@ -811,11 +797,6 @@ def plot_one_feature(
 
     # Set grid as the support
     X_emb=adata.obsm[embedding]
-    # rotational_matrix = adata.uns['emb_umap']._densmap_kwds['VH_embedding']
-    # rotational_matrix = adata.obsm['VH_embedding']
-    # r_emb = adata.obsm['rad_emb_no_log']
-    # s = Scms(X_emb, 0.5, min_radius=5)
-    
     V_emb=adata.obsm[vkey] 
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
     X_emb = X_emb[idx_valid]
