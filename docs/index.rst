@@ -14,16 +14,11 @@
 
    notebooks/test_github_pancreas.ipynb
 
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: Tutorial:
-
    notebooks/test_github.ipynb
 
 .. toctree::
    :hidden:
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: API:
 
    api/index
