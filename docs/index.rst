@@ -16,14 +16,14 @@
 
 .. toctree::
    :hidden:
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Tutorial:
 
    notebooks/test_github.ipynb
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: API:
 
    api/index
