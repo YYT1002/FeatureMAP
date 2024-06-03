@@ -48,6 +48,18 @@ configuration = {
                          ],
     "extras_require": {
         "plot": [
+            # "scanpy",
+            "pandas",
+            # "anndata",
+            "matplotlib >= 3.5.1"
+        ],
+         "features": [
+            "scanpy",
+            "pandas",
+            "anndata",
+            "matplotlib >= 3.5.1"
+        ],
+         "core_transition_state": [
             "scanpy",
             "pandas",
             "anndata",
