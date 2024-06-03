@@ -15,8 +15,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
     
 configuration = {
-    'name' : 'featuremap',
-    'version': '1.0.0',
+    'name' : 'featuremap-learn',
+    'version': '1.0.2',
     'description' : 'FeatureMAP',
     'long_description' : long_description,
     'long_description_content_type' : "text/markdown",
@@ -44,9 +44,22 @@ configuration = {
                          'scikit-learn >= 0.16',
                           'scipy >= 0.19',
                          'numba >= 0.55.0',
+                         'umap-learn >= 0.5.1',
                          ],
     "extras_require": {
         "plot": [
+            # "scanpy",
+            "pandas",
+            # "anndata",
+            "matplotlib >= 3.5.1"
+        ],
+         "features": [
+            "scanpy",
+            "pandas",
+            "anndata",
+            "matplotlib >= 3.5.1"
+        ],
+         "core_transition_state": [
             "scanpy",
             "pandas",
             "anndata",
