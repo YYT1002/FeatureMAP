@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 .. figure:: ../figures/featureMAP.png
+=======
+.. figure:: ./figures/featureMAP.png
+>>>>>>> 7b6bc067cbf788dce216bfaaf10463d17c00f360
    :alt: FeatureMAP Illustration
 
    FeatureMAP Illustration
@@ -137,7 +141,14 @@ License
 
 The FeatureMAP package is under BSD-3-Clause license.
 
+<<<<<<< HEAD
 .. |Bifurcation Embedding| image:: ../figures/bifurcation_embedding.png
 .. |Gene Contribution| image:: ../figures/gene_contribution.png
 .. |Gene Variation Trajectory| image:: ../figures/gene_variation_trajectory.png
 .. |Core and Transition States| image:: ../figures/core_trans_states.png
+=======
+.. |Bifurcation Embedding| image:: ./figures/bifurcation_embedding.png
+.. |Gene Contribution| image:: ./figures/gene_contribution.png
+.. |Gene Variation Trajectory| image:: ./figures/gene_variation_trajectory.png
+.. |Core and Transition States| image:: ./figures/core_trans_states.png
+>>>>>>> 7b6bc067cbf788dce216bfaaf10463d17c00f360

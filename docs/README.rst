@@ -11,22 +11,26 @@ heterogeneity and dynamics. Traditional methods like UMAP and t-SNE are
 effective for clustering but often miss critical gene information.
 FeatureMAP innovatively combines UMAP and PCA concepts to preserve both
 clustering structures and gene feature variations within a
-low-dimensional space. Z ## Description
+low-dimensional space.
+
+Description
+-----------
 
 FeatureMAP introduces a novel approach by enhancing manifold learning
 with pairwise tangent space embedding, aiming to retain crucial aspects
-of cellular data. We introduce two visualization by FeatureMAP:
+of cellular data. We introduce two visualization plots by FeatureMAP:
 expression (GEX) and variation (GVA) embedding. Here is an example over
 one synthetic dataset
-(`BEELINE <https://github.com/Murali-group/Beeline>`__) with bifurcation
-model. Compared with UMAP, FeatureMAP-GEX better preserves density
-(similar to densMAP), and FeatureMAP-GVA shows trajectories.
-|Bifurcation Embedding|
+(`BEELINE <https://github.com/Murali-group/Beeline>`__) with a
+bifurcation model. Compared with UMAP, FeatureMAP-GEX better preserves
+density, and FeatureMAP-GVA shows trajectories. |Bifurcation Embedding|
 
-Besides the 2-dimensional visualization, FeatureMAP presents three core
-concepts: 1. **Gene Contribution**: Estimating and projecting gene
-feature loadings. The arrow represents the direction and magnitude of
-one gene’s change. |Gene Contribution|
+Besides the two-dimensional visualization, FeatureMAP presents three
+core concepts:
+
+1. **Gene Contribution**: Estimating and projecting gene feature
+   loadings. The arrow represents the direction and magnitude of one
+   gene’s change. |Gene Contribution|
 
 2. **Gene Variation Trajectory**: Tracking the cell differentiation
    across states. There are clear paths (transition states) connecting
@@ -40,12 +44,13 @@ one gene’s change. |Gene Contribution|
    states are lower cell density and larger cell variation. |Core and
    Transition States|
 
-These enhancements allow for differential gene variation analysis,
+These enhancements allow for differential gene variation (DGV) analysis,
 highlighting key regulatory genes that drive transitions between
 cellular states. Tested on both synthetic and real single-cell RNA
 sequencing (scRNA-seq) data, including studies on pancreatic development
-and T-cell exhaustion, FeatureMAP provides a more detailed understanding
-of cellular trajectories and regulatory mechanisms.
+and T-cell exhaustion (Tutorials in ??), FeatureMAP provides a more
+detailed understanding of cellular trajectories and regulatory
+mechanisms.
 
 Getting Started
 ---------------
@@ -66,13 +71,17 @@ Installation
 
 .. code:: bash
 
-   pip install featuremap
+   pip install featuremap-learn
 
 2. Installation via Conda
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For users who prefer using Conda, especially for managing complex
 dependencies and environments in scientific computing.
+
+::
+
+   conda install ???
 
 How to use FeatureMAP
 ---------------------
@@ -81,11 +90,11 @@ Data Visualization
 ~~~~~~~~~~~~~~~~~~
 
 For data visualization, FeatureMAP introduces expression embedding and
-variation embedding:
+variation embedding. Here is one example by MNIST datasets.
 
 ::
 
-   import featuremap:
+   import featuremap
    from sklearn.datasets import fetch_openml
    from sklearn.utils import resample
 
@@ -108,32 +117,25 @@ x_emb: expession embedding to show the clustering
 
 v_emb: variation embedding to show the trajectory
 
-The tutorial is ??????
-
-Example data and plots
-----------------------
-
 Documentation
 -------------
+
+More tutorials are at
+https://featuremap.readthedocs.io/en/latest/index.html.
 
 Citation
 --------
 
-Our FeatureMAP alogrithm is
+Our FeatureMAP alogrithm is based on the paper
+
+Yang, Yang, et al. “Interpretable Dimensionality Reduction by Feature
+Preserving Manifold Approximation and Projection.” arXiv preprint
+arXiv:2211.09321 (2022).
 
 License
 -------
 
 The FeatureMAP package is under BSD-3-Clause license.
-
-Contact
--------
-
-Acknowledgments
-~~~~~~~~~~~~~~~
-
-Thanks to the researchers and developers who provided insights and code
-snippets, including:
 
 .. |Bifurcation Embedding| image:: ../figures/bifurcation_embedding.png
 .. |Gene Contribution| image:: ../figures/gene_contribution.png
