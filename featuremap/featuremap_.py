@@ -450,16 +450,23 @@ def tangent_space_embedding(
 def variation_embedding(
         data,
         featuremap_kwds,
-        # n_components=2,
-        # random_state=42,
-        # n_neighbors=30,
-        # min_dist=0.5,
-        # spread=1,
-        # metric='euclidean',
-        # threshold=0.5,
         ):        
     """
-    Variation embedding 
+    Compute the variation embedding of the data
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The source data to be embedded by FeatureMAP.
+    featuremap_kwds: dict
+        Key word arguments to be used by the FeatureMAP optimization.
+    
+    Returns
+    -------
+    emb_variation: array of shape (n_samples, n_components)
+        The optimized of ``graph`` of variation into an ``n_components`` dimensional
+        euclidean space.
+
     """
 
     n_components=featuremap_kwds["n_components"]
@@ -600,10 +607,6 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     metric_kwds: dict
         Key word arguments to be passed to the metric function; used if
         multiple connected components need to be layed out.
-
-    # featuremap: bool
-    #     Whether to use the feature-augmented objective function to optimize
-    #     the embedding according to the FeatureMAP algorithm.
 
     featuremap_kwds: dict
         Key word arguments to be used by the FeatureMAP optimization.
