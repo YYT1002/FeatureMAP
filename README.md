@@ -1,4 +1,4 @@
-![FeatureMAP Illustration](./figures/featureMAP.png)
+![FeatureMAP Illustration](../figures/featureMAP.png)
 
 # FeatureMAP: Feature-preserving Manifold Approximation and Projection
 
@@ -9,19 +9,19 @@ Visualizing single-cell data is crucial for understanding cellular heterogeneity
 FeatureMAP introduces a novel approach by enhancing manifold learning with pairwise tangent space embedding, aiming to retain crucial aspects of cellular data.
 We introduce two visualization plots by FeatureMAP: expression (GEX) and variation (GVA) embedding.
 Here is an example over one synthetic dataset ([BEELINE](https://github.com/Murali-group/Beeline)) with a bifurcation model. Compared with UMAP, FeatureMAP-GEX better preserves density, and FeatureMAP-GVA shows trajectories.
-![Bifurcation Embedding](./figures/bifurcation_embedding.png)
+![Bifurcation Embedding](../figures/bifurcation_embedding.png)
 
 Besides the two-dimensional visualization, FeatureMAP presents three core concepts:
 
 1. **Gene Contribution**: Estimating and projecting gene feature loadings. The arrow represents the direction and magnitude of one gene's change. 
-    ![Gene Contribution](./figures/gene_contribution.png)
+    ![Gene Contribution](../figures/gene_contribution.png)
 
 2. **Gene Variation Trajectory**: Tracking the cell differentiation across states. There are clear paths (transition states) connecting cell states (core states) in a knot-and-thread way.
-    ![Gene Variation Trajectory](./figures/gene_variation_trajectory.png)
+    ![Gene Variation Trajectory](../figures/gene_variation_trajectory.png)
     [View 3D Plot](https://YYT1002.github.io/FeatureMAP/figures/3d_plot.html)
    
 3. **Core and Transition States**: Defined computationally through cell density and cell variation properties. Core states are cells with higher cell density and smaller cell variation, while transition states are lower cell density and larger cell variation.
-    ![Core and Transition States](./figures/core_trans_states.png)
+    ![Core and Transition States](../figures/core_trans_states.png)
    
 
 These enhancements allow for differential gene variation (DGV) analysis, highlighting key regulatory genes that drive transitions between cellular states. Tested on both synthetic and real single-cell RNA sequencing (scRNA-seq) data, including studies on pancreatic development and T-cell exhaustion (Tutorials in ??), FeatureMAP provides a more detailed understanding of cellular trajectories and regulatory mechanisms.
