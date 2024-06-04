@@ -105,6 +105,29 @@ def local_svd(
         n_neighbors=15,
         n_neighbors_in_guage=30,
         ):
+    """
+    Local singular value decomposition (SVD) for each node in the data
+
+    Parameters:
+    -----------
+    data: array of shape (n_samples, n_features)
+        The source data to be embedded by FeatureMAP.
+    knn_index: array of shape (n_samples, n_neighbors)
+        The index of k-nearest neighbors for each node
+    weight: array of shape (n_samples, n_samples)
+        The weight matrix of the graph
+    n_neighbors: int
+        The number of nearest neighbors
+    n_neighbors_in_guage: int
+        The number of nearest neighbors for local SVD
+    
+    Returns:
+    --------
+    gauge_u: list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
+    singular_values: list of shape (n_neighbors_in_guage,); store single values for each frame
+    gauge_vh: list of shape (n_neighbors_in_guage, d); store v
+    
+    """
     gauge_u = [] # list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
     singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
     gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
