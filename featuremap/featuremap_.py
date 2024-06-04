@@ -71,7 +71,7 @@ import numba
 #     # optimize_layout_inverse,
 # )
 
-from featuremap.core_transition_state import kernel_density_estimate
+# from featuremap.core_transition_state import kernel_density_estimate
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
@@ -94,7 +94,50 @@ DISCONNECTION_DISTANCES = {
     "dice": 1,
 }
 
+from sklearn.neighbors import NearestNeighbors
 
+def kernel_density_estimate(data, X, bw=0.5, min_radius=5, output_onlylogp=False, ):
+        """
+        Density estimation for data points specified by X with kernel density estimation.
+
+        Parameters
+        ----------
+        data : array of shape (n_samples, n_features)
+            2D array including data points. Input to density estimation.
+       
+        X : array
+            2D array including multiple data points. Input to density estimation.
+        output_onlylogp : bool
+            If true, returns logp, else returns p, g, h, msu.
+
+        Returns
+        -------
+        p : array
+            1D array.  Unnormalized probability density. The probability density
+            is not normalized due to numerical stability. Exact log probability
+        """
+        nbrs = NearestNeighbors(n_neighbors=min_radius + 1).fit(data)
+        adaptive_bw = np.maximum(nbrs.kneighbors(data)[0][:, -1], bw)
+
+        # the number of data points and the dimensionality
+        n, d = data.shape
+
+        from scipy.spatial.distance import cdist
+        # compare euclidean distances between each pair of data and X
+        D = cdist(data, X)
+        
+
+        # and evaluate the kernel at each distance
+        # prevent numerical overflow due to large exponentials
+        logc = -d * np.log(np.min(adaptive_bw)) - d / 2 * np.log(2 * np.pi)
+        C = (adaptive_bw[:, np.newaxis] / np.min(adaptive_bw)) ** (-d) * \
+            np.exp(-1 / 2. * (D / adaptive_bw[:, np.newaxis]) ** 2)
+
+        if output_onlylogp:
+            # return the kernel density estimate
+            return np.log(np.mean(C, axis=0).T) + logc
+        else:
+            return np.mean(C, axis=0).T
 
 
 @numba.njit()
@@ -108,7 +151,7 @@ def local_svd(
     """
     Local singular value decomposition (SVD) for each node in the data
 
-    Parameters:
+    Parameters
     -----------
     data: array of shape (n_samples, n_features)
         The source data to be embedded by FeatureMAP.
@@ -121,12 +164,12 @@ def local_svd(
     n_neighbors_in_guage: int
         The number of nearest neighbors for local SVD
     
-    Returns:
+    Returns
     --------
     gauge_u: list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
     singular_values: list of shape (n_neighbors_in_guage,); store single values for each frame
     gauge_vh: list of shape (n_neighbors_in_guage, d); store v
-    
+
     """
     gauge_u = [] # list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
     singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
@@ -195,14 +238,21 @@ def tangent_space_approximation(
         data,
         graph,
         featuremap_kwds,
-        # n_neighbors=30,
-        # n_neighbors_in_guage=60,
-        # knn_index=None,
-        # verbose=False,
-        tqdm_kwds=None,):
+        ):
     """
     Compute the origial gauge in high-dimensional data by local SVD
-    
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The source data to be embedded by FeatureMAP.
+    graph: sparse matrix
+        The 1-skeleton of the high dimensional fuzzy simplicial set as
+        represented by a graph for which we require a sparse matrix for the
+        (weighted) adjacency matrix.
+    featuremap_kwds: dict
+        Key word arguments to be used by the FeatureMAP optimization.
+            
     Returns
     -------
     Local tangent space U, S, V
@@ -329,6 +379,14 @@ def tangent_space_approximation(
 def tangent_space_embedding(
         featuremap_kwds,
         ):    
+    """
+    Embedding the gauge (rotation matrix) to low dim space
+
+    Parameters
+    ----------
+    featuremap_kwds: dict
+        Key word arguments to be used by the FeatureMAP optimization.  
+    """
     
     ################################################################################
     # Embedding the gauge (rotation matrix) to low dim space
