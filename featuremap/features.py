@@ -29,6 +29,25 @@ from featuremap.core_transition_state import kernel_density_estimate
 
 # Create adata object for plotting
 def create_adata(X, emb_featuremap, obs=None, var=None):
+    """
+    Create an AnnData object for plotting
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Data matrix.
+    emb_featuremap : object
+        Featuremap object.
+    obs : pd.DataFrame
+
+    var : pd.DataFrame
+
+    Returns
+    -------
+    adata : AnnData
+        Annotated data matrix.
+
+    """
     adata = ad.AnnData(X=X)
     if obs is not None:
         adata.obs = obs
@@ -52,7 +71,21 @@ def create_adata(X, emb_featuremap, obs=None, var=None):
 
 def pseudotime_mst(adata, random_state, start_point_index):
     """
-    Given a staring point, compute the distance to all other points on the mst
+    Given a staring point, compute the pseudotime by distance to all other points on the MST
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    random_state : int
+        Random seed.
+    start_point_index : int
+        Starting point index.
+    
+    Returns
+    -------
+    adata.obs['feat_pseudotime'] = pseudotime_mst
+        pseudotime_mst : np.ndarray. Pseudotime based on MST.
     """
     from featuremap import featuremap_
     from umap.umap_ import fuzzy_simplicial_set
@@ -107,12 +140,27 @@ def pseudotime_mst(adata, random_state, start_point_index):
 
 
 
-
 def quiver_autoscale(X_emb, V_emb):
-    import matplotlib.pyplot as pl
+    """
+    Autoscale the arrow plot
+
+    Parameters
+    ----------
+    X_emb : np.ndarray
+        Embedding matrix.
+    V_emb : np.ndarray
+        Variation embedding matrix.
+
+    Returns
+    -------
+    Q.scale / scale_factor * 5
+        Scale factor for quiver plot.
+           
+    """
+    import matplotlib.pyplot as plt
 
     scale_factor = np.abs(X_emb).max()  # just so that it handles very large values
-    fig, ax = pl.subplots()
+    fig, ax = plt.subplots()
     Q = ax.quiver(
         X_emb[:, 0] / scale_factor,
         X_emb[:, 1] / scale_factor,
@@ -124,7 +172,7 @@ def quiver_autoscale(X_emb, V_emb):
     )
     Q._init()
     fig.clf()
-    pl.close(fig)
+    plt.close(fig)
     return Q.scale / scale_factor * 5
 
 
@@ -139,6 +187,30 @@ def plot_gauge(
         min_mass=1,
         autoscale=True,
         ):
+    
+    """
+    Plot the gauge embedding to visualize the eigengene (or frame for feature loadings)
+
+    Parameters
+    ----------
+    adata : AnnData
+        An annotated data matrix.
+    embedding : string
+        Embedding background for feature plot. The default is 'X_featmap'.
+    vkey : string   
+        Variation key. The default is 'gauge_v1_emb'.
+    density : float
+        Grid desity for plot. The default is 1.
+    smooth : float
+        For kde estimation. The default is 0.5.
+    n_neighbors : int   
+        Number of neighbours for kde. The default is None.
+    min_mass : float
+        Minumum denstiy to show the grid plot. The default is 1.
+    autoscale : bool
+        Scale the arrow plot. The default is True.
+            
+    """
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
     # X_emb=adata.obsm[embedding]
@@ -220,6 +292,27 @@ def plot_gauge_both(
         min_mass=1,
         autoscale=True,
         ):
+    """
+    Plot the gauge embedding to visualize the eigengene (or frame for feature loadings)
+
+    Parameters
+    ----------
+    adata : AnnData
+        An annotated data matrix.  
+    embedding : string  
+        Embedding background for feature plot. The default is 'X_featmap'.
+    density : float
+        Grid desity for plot. The default is 1.
+    smooth : float 
+        For kde estimation. The default is 0.5.
+    n_neighbors : int
+        Number of neighbours for kde. The default is None.
+    min_mass : float
+        Minumum denstiy to show the grid plot. The default is 1.
+    autoscale : bool
+        Scale the arrow plot. The default is True.
+            
+    """
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
     # X_emb=adata.obsm[embedding]
@@ -361,45 +454,59 @@ def plot_gauge_both(
     # plt.clf()
     
     
-def matrix_multiply(X, Y):
-   # X shape: (11951, 60, 100)
-   # Y shape: (100, 14577)
-   # The goal is to multiply each 60x100 matrix in X with Y, resulting in 11951 matrices of size 60x14577
+# def matrix_multiply(X, Y):
+#    # X shape: (11951, 60, 100)
+#    # Y shape: (100, 14577)
+#    # The goal is to multiply each 60x100 matrix in X with Y, resulting in 11951 matrices of size 60x14577
 
-   # Reshape X to a 2D array for matrix multiplication
-   X_reshaped = X.reshape(-1, Y.shape[0])  # Shape becomes (11951*60, 100)
+#    # Reshape X to a 2D array for matrix multiplication
+#    X_reshaped = X.reshape(-1, Y.shape[0])  # Shape becomes (11951*60, 100)
    
-   # Perform matrix multiplication
-   result = np.dot(X_reshaped, Y)  # Resulting shape is (11951*60, 14577)
+#    # Perform matrix multiplication
+#    result = np.dot(X_reshaped, Y)  # Resulting shape is (11951*60, 14577)
    
-   # Reshape the result back to 3D
-   result_reshaped = result.reshape(X.shape[0], X.shape[1], Y.shape[1])  # Shape becomes (11951, 60, 14577)
+#    # Reshape the result back to 3D
+#    result_reshaped = result.reshape(X.shape[0], X.shape[1], Y.shape[1])  # Shape becomes (11951, 60, 14577)
+#    return result_reshaped
 
-   return result_reshaped
 
+# from multiprocessing import Pool
+# # import itertools
+# def compute_norm_chunk(array, start, end):
+#     # Slice the actual array
+#     chunk = array[start:end]
+#     return np.linalg.norm(chunk, axis=1)
 
-from multiprocessing import Pool
-# import itertools
-def compute_norm_chunk(array, start, end):
-    # Slice the actual array
-    chunk = array[start:end]
-    return np.linalg.norm(chunk, axis=1)
+# def compute_norm_parallel(array, chunk_size):
+#     # Split the first dimension into chunks
+#     ranges = [(i, min(i + chunk_size, array.shape[0])) for i in range(0, array.shape[0], chunk_size)]
 
-def compute_norm_parallel(array, chunk_size):
-    # Split the first dimension into chunks
-    ranges = [(i, min(i + chunk_size, array.shape[0])) for i in range(0, array.shape[0], chunk_size)]
-
-    with Pool() as pool:
-        # Map the compute_norm_chunk function to each chunk
-        results = pool.starmap(compute_norm_chunk, [(array, r[0], r[1]) for r in ranges])
-    # Concatenate the results
-    return np.concatenate(results)
+#     with Pool() as pool:
+#         # Map the compute_norm_chunk function to each chunk
+#         results = pool.starmap(compute_norm_chunk, [(array, r[0], r[1]) for r in ranges])
+#     # Concatenate the results
+#     return np.concatenate(results)
 
 
 def local_intrinsic_dim(
         adata: AnnData,
         threshold=0.9,
 ):
+    """
+    Compute the intrinsic dimensionality locally based on local SVD.
+
+    Parameters
+    ----------
+    adata : AnnData
+        An annotated data matrix.
+    threshold : float
+        Threshold for proportion of variance contributions. The default is 0.9.
+    
+    Returns
+    -------
+    intrinsic_dim : np.ndarray
+        Intrinsic dimensionality.   
+    """
     singular_values_collection = adata.obsm['Singular_value'].copy()
     
     # Compute intrinsic dimensionality locally
@@ -504,6 +611,9 @@ def feature_projection(
     ----------
     adata : AnnData
         An annotated data matrix.
+    feature : string
+        Feature name to be plotted.
+
     """
     
     vh_smoothed = adata.obsm['vh_smoothed'].copy()
@@ -950,6 +1060,14 @@ def plot_one_feature(
 
 
 def variation_feature_pp(adata):
+    """
+    Preprocess the variation feature for DGV analysis
+
+    Parameters
+    ----------
+    adata : AnnData
+        An annotated data matrix.
+    """
     import anndata as ad
     layer = 'variation_feature'
     adata_var = ad.AnnData(X=adata.layers[layer].copy(), )
@@ -1000,6 +1118,28 @@ def feature_variation_embedding(
         variation_preprocess_flag=False,
         random_state=42
         ):
+    """
+    Compute the feature variation embedding based on all features based on local SVD.
+
+    Parameters
+    ----------
+    adata : AnnData
+        An annotated data matrix.   
+    n_components : int
+        Number of components for embedding. The default is 2.
+    layer : string
+        Layer for variation feature. The default is 'variation_feature'.
+    variation_preprocess_flag : bool
+        Whether to preprocess the variation feature. The default is False.
+    random_state : int
+        Random state. The default is 42.
+
+    Returns
+    -------
+    adata_var : AnnData
+        Annotated data matrix with variation matrix and variation embedding.  
+
+    """
     
     adata_var = ad.AnnData(X=adata.layers[layer].copy(), )
     adata_var.X[np.isnan(adata_var.X)]=0
@@ -1063,6 +1203,20 @@ def feature_variation_embedding(
     return adata_var
     
 def featuremap_var_3d(emb_var_3d, color=None, symbol=None, marker_size=3):
+    """
+    Plot the feature variation embedding in 3D.
+
+    Parameters
+    ----------
+    emb_var_3d : np.ndarray
+        3D embedding of feature variation.
+    color : string
+        Color indicator. The default is None.
+    symbol : string
+        Symbol indicator. The default is None.
+    marker_size : int
+        Marker size. The default is 3.  
+    """
     import plotly   
     # importlib.reload(nbformat)
     import plotly.express as px
