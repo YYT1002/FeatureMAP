@@ -638,11 +638,6 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     embedding: array of shape (n_samples, n_components)
         The optimized of ``graph`` into an ``n_components`` dimensional
         euclidean space.
-
-    aux_data: dict
-        Auxiliary output returned with the embedding. When FeatureMAP extension
-        is turned on, this dictionary includes local radii in the original
-        data (``rad_orig``) and in the embedding (``rad_emb``).
     """
     graph = graph.tocoo() #TODO: tocoo or toarray?
     head = graph.row
