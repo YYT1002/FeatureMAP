@@ -416,6 +416,13 @@ def _optimize_layout_euclidean_single_epoch_grad(
     feat_mu,
     feat_mu_tot,
 ):  
+    """
+    Optimize the layout of the embedding using stochastic gradient descent in one epoch.
+    Each node has a rotation matrix VH, which is used to project the node vector to the principal direction, 
+    where each node is associated with a hyperecllipse indicating the anisotropic variance in the embedding space.
+    The optimization is based on the feature-augmented featuremap objective. 
+    
+    """
     for i in numba.prange(epochs_per_sample.shape[0]):
         if epoch_of_next_sample[i] <= n:
             j = head[i]
