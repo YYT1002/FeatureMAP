@@ -70,6 +70,18 @@ def plot_density(
         adata: AnnData,
         emb = 'featmap',
             ):
+    """
+    Plot the density of the embedding space.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    emb : str
+        The embedding space to plot the density.
+
+    
+    """
     data = adata.obsm[f'X_{emb}'].copy()  # Exclude one leiden cluster;
 
     min_x = min(data[:, 0])
@@ -117,6 +129,21 @@ def core_transition_state(
         top_percent = 0.2
         
         ):
+    """
+    Identify the core state and transition state in the embedding space.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    emb : str
+        The embedding space to plot the density.    
+    cluster_key : str
+        The key of clusters in adata.obs.
+    top_percent : float 
+        The top percentage of the core state in each cluster.
+            
+    """
     
     import scanpy as sc
     # adata.obs['clusters'] = adata.obs['clusters_fine']
@@ -219,6 +246,35 @@ def core_transition_state(
 ##############################################################
 
 def nodes_of_transition_states(adata, start_state, end_state, clusters):
+    """
+    Collect the nodes of transition states given the start and end state.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    start_state : str
+        The start state of the transition.
+    end_state : str 
+        The end state of the transition.
+    clusters : list
+        The list of clusters in the data.
+
+    Returns
+    -------
+    path_nodes : np.array
+        The nodes of the path from start to end state.
+    path_points_nn : np.array
+        The points of the path from start to end state.
+    end_bridge_points : np.array
+        The points of the end bridge.
+    core_points : np.array
+        The points of the core states.
+    transition_points : np.array
+        The points of the transition states.
+
+    
+    """
 
     node_name_start = adata.obs['corestates_largest'][adata.obs['corestates_largest'] == (start_state)].index[0]
     start = np.where(adata.obs_names == node_name_start)[0][0]
@@ -362,6 +418,8 @@ def nodes_of_transition_states(adata, start_state, end_state, clusters):
 # from scipy.sparse.csgraph import shortest_path, dijkstra
 def mst_subgraph(adata, tree_points, emb='X_featmap'):
     """
+    Construct the minimum spanning tree over the tree points.
+    
 
     Parameters
     ----------
@@ -408,6 +466,23 @@ def mst_subgraph(adata, tree_points, emb='X_featmap'):
 
 
 def ridge_pseudotime(adata, root, plot='featmap'):
+    """
+    Compute the pseudotime along the ridge path.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    root : str
+        The root of the ridge path.
+    plot : str  
+        The embedding space to plot the pseudotime.
+    Returns
+    -------
+    adata.obs['ridge_pseudotime'] : np.array
+        The pseudotime along the ridge path.
+            
+    """
     from scipy.special import expit
     from sklearn.preprocessing import scale
 
@@ -496,6 +571,22 @@ def ridge_pseudotime(adata, root, plot='featmap'):
 
 
 def bifurcation_plot(adata, core_states, transition_states_1, transition_states_2):
+    """
+    Plot the bifurcation states in the embedding space.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    core_states : list
+        The list of core states.
+    transition_states_1 : list  
+        The list of transition states 1.
+    transition_states_2 : list
+        The list of transition states 2.
+
+
+    """
 
     core_states_map = {str(i):'core' for i in core_states}
     transition_states_map_1 = {str(i):'transition_1' for i in transition_states_1}
@@ -508,6 +599,20 @@ def bifurcation_plot(adata, core_states, transition_states_1, transition_states_
     sc.pl.embedding(adata, 'featmap_v',legend_fontsize=10, s=10, color=['core_trans_states_bifur'])
 
 def path_plot(adata, core_states, transition_states):
+    """
+    Plot the path states in the embedding space.    
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.  
+    core_states : list
+        The list of core states.
+    transition_states : list
+        The list of transition states.
+
+    
+    """
     core_states_map = {str(i):'core' for i in core_states}
     transition_states_map = {str(i):'transition' for i in transition_states}
 
@@ -523,6 +628,22 @@ def path_plot(adata, core_states, transition_states):
 ############################################
 #%%
 def plot_density_pseudotime(filtered_data, pseudotime='feat_pseudotime', clusters='clusters', density='density'):
+    """
+    Plot the density vs pseudotime.
+
+    Parameters
+    ----------  
+    filtered_data : pd.DataFrame
+        The dataframe including the data.
+    pseudotime : str
+        The pseudotime in the data.
+    clusters : str
+        The clusters in the data.
+    density : str
+        The density in the data.
+
+
+    """
     from pygam import LinearGAM
     import seaborn as sns
     import matplotlib.pyplot as plt
