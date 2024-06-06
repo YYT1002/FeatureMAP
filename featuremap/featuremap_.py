@@ -171,67 +171,34 @@ def local_svd(
     gauge_vh: list of shape (n_neighbors_in_guage, d); store v
 
     """
-    gauge_u = [] # list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
-    singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
-    gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
     
-
-    if n_neighbors_in_guage < n_neighbors:
-        # use knn_index to collect n_neighbors_in_guage neighbors for each node;
-        # and collect corresponding weights
-        for row_i in range(data.shape[0]):
-            # skip the first point, the nearest on is itself
-            data_around_i_index = knn_index[row_i][1:n_neighbors_in_guage+1]
-            data_around_i = data[data_around_i_index] - data[row_i]
-            
-            weight_around_i = np.zeros(n_neighbors_in_guage, dtype=np.float32)
-            for neighbor_j in range(n_neighbors_in_guage):
-                neighbor_j_index = knn_index[row_i][neighbor_j+1]
-                weight_around_i[neighbor_j] = weight[row_i][neighbor_j_index]     
-                # idx = np.intersect1d(np.where(head==row_i)[0], np.where(tail==neighbor_j_index)[0])[0]
-                # weight_around_i[neighbor_j] = weight[idx]
-
-            # weighted SVD around i
-            # store first n_components rows of VH
-            weight_around_i = np.diag(weight_around_i) / np.sum(weight_around_i)
-            weight_around_i = np.sqrt(weight_around_i)
-            u, s, vh = np.linalg.svd(np.dot(weight_around_i, data_around_i), full_matrices=False)
-            gauge_u.append(u)
-            singular_values.append(s)
-            gauge_vh.append(vh)
-                    
-    else:
-        for row_i in range(data.shape[0]):
-            # Find KNNs row-by-row
+    gauge_u = []
+    singular_values = []
+    gauge_vh = []
+    
+    for row_i in numba.prange(data.shape[0]):
+        if n_neighbors_in_guage < n_neighbors:
+            indices = knn_index[row_i, 1:n_neighbors_in_guage+1].astype(np.int64)
+        else:
             row_weight = weight[row_i]
-            
-            # if len(row_weight) < n_neighbors_in_guage:
-            #     raise ValueError(
-            #         "Some rows contain fewer than n_neighbors distances!"
-            #     )
-            #  val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i])))
-            data_around_i_index = np.argsort(-row_weight)[1: n_neighbors_in_guage+1]
-            # print('data_around_i_index, ' + str(data_around_i_index))
-            data_around_i = data[data_around_i_index] - data[row_i]
-            
-            weight_around_i = np.zeros(n_neighbors_in_guage, dtype=np.float32)
-            for neighbor_j in range(n_neighbors_in_guage):
-                neighbor_j_index = data_around_i_index[neighbor_j]
-                weight_around_i[neighbor_j] = weight[row_i][neighbor_j_index]
-                # idx = np.intersect1d(np.where(head==row_i)[0], np.where(tail==neighbor_j_index)[0])[0]
-                # weight_around_i[neighbor_j] = weight[idx]
-                
-            # weighted SVD around i
-            # store first n_components rows of VH
-            weight_around_i = np.diag(weight_around_i) / np.sum(weight_around_i)
-            weight_around_i = np.sqrt(weight_around_i)
-            u, s, vh = np.linalg.svd(np.dot(weight_around_i, data_around_i), full_matrices=False)
-            gauge_u.append(u)
-            singular_values.append(s)
-            gauge_vh.append(vh)
-            
-    return  gauge_u, singular_values, gauge_vh
-     
+            indices = np.argsort(-row_weight)[1:n_neighbors_in_guage+1].astype(np.int64)
+
+        data_around_i = data[indices] - data[row_i]
+        
+        weights_around_i = weight[row_i, indices]
+        weight_diag = np.diag(weights_around_i / np.sum(weights_around_i))
+        weight_sqrt = np.sqrt(weight_diag)
+        
+        u, s, vh = np.linalg.svd(np.dot(weight_sqrt, data_around_i), full_matrices=False)
+        
+        gauge_u.append(u)
+        singular_values.append(s)
+        gauge_vh.append(vh)
+
+    return gauge_u, singular_values, gauge_vh
+
+    return gauge_u, singular_values, gauge_vh
+                 
 
 # @numba.njit()
 def tangent_space_approximation(
