@@ -418,6 +418,7 @@ def nodes_of_transition_states(adata, start_state, end_state, clusters):
 # from scipy.sparse.csgraph import shortest_path, dijkstra
 def mst_subgraph(adata, tree_points, emb='X_featmap'):
     """
+    Construct the minimum spanning tree over the tree points.
 
     Parameters
     ----------
@@ -640,7 +641,7 @@ def plot_density_pseudotime(filtered_data, pseudotime='feat_pseudotime', cluster
     density : str
         The density in the data.
 
-        
+
     """
     from pygam import LinearGAM
     import seaborn as sns
