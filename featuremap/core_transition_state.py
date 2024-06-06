@@ -642,7 +642,11 @@ def plot_density_pseudotime(filtered_data, pseudotime='feat_pseudotime', cluster
     density : str
         The density in the data.
 
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> d30eb5c7c6f74c40a01db6ee746bd6b1ec8888e2
     """
     from pygam import LinearGAM
     import seaborn as sns
