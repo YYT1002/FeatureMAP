@@ -4,6 +4,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def plot_density_pseudotime(filtered_data, pseudotime='feat_pseudotime', clusters='clusters', density='density'):
+    """
+    Plot the density of cells along the pseudotime trajectory.
+
+    Parameters
+    ----------
+    filtered_data : pd.DataFrame
+        The filtered data containing the pseudotime, clusters, and density.
+    pseudotime : str
+        The column name of the pseudotime.
+    clusters : str
+        The column name of the clusters.
+    density : str
+        The column name of the density.
+
+    """
     from pygam import LinearGAM
     import seaborn as sns
     import matplotlib.pyplot as plt
