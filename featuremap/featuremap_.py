@@ -94,8 +94,21 @@ DISCONNECTION_DISTANCES = {
     "dice": 1,
 }
 
-from sklearn.neighbors import NearestNeighbors
 
+# Preprocess the data by singular value decomposition
+def _preprocess_data(X): 
+    T1 = time.time()
+    if X.shape[1] > 100:
+        print("Performing SVD decomposition on the data")
+        u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
+        X = np.matmul(u, np.diag(s))
+    else:
+        vh = np.eye(X.shape[1])
+    T2 = time.time()
+    print(f'SVD decomposition time is {T2-T1}')
+    return X, vh
+
+from sklearn.neighbors import NearestNeighbors
 def kernel_density_estimate(data, X, bw=0.5, min_radius=5, output_onlylogp=False, ):
         """
         Density estimation for data points specified by X with kernel density estimation.
@@ -908,7 +921,7 @@ def simplicial_set_embedding_with_tangent_space_embedding(
         
     return embedding
         
-        
+
 
 
 
@@ -1440,6 +1453,8 @@ class FeatureMAP(BaseEstimator):
             metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
+    
+
 
     def fit(self, X):
         """Fit X into an embedded space.
@@ -1452,13 +1467,15 @@ class FeatureMAP(BaseEstimator):
             is 'exact', X may be a sparse matrix of type 'csr', 'csc'
             or 'coo'.
         """
-
-        # SVD decompostion of data 
-        if X.shape[1] > 100:
-            u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
-            X = np.matmul(u, np.diag(s))
-        else:
-            vh = np.eye(X.shape[1])
+  
+        # # SVD decompostion of data 
+        # if X.shape[1] > 100:
+        #     if self.verbose:
+        #         print("Performing SVD decomposition on the data")
+        #     u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
+        #     X = np.matmul(u, np.diag(s))
+        # else:
+        #     vh = np.eye(X.shape[1])
 
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         self._raw_data = X
@@ -1480,7 +1497,7 @@ class FeatureMAP(BaseEstimator):
         self._validate_parameters()
 
         # SVD decomposition of data
-        self._featuremap_kwds['svd_vh'] = vh.T
+        # self._featuremap_kwds['svd_vh'] = vh.T
 
         if self.verbose:
             print(str(self))
