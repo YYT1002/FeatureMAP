@@ -236,7 +236,7 @@ def tangent_space_approximation(
     singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
     gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
     
-        
+    T1 = time.time()
     gauge_u,singular_values, gauge_vh = local_svd(
             data,
             knn_index,
@@ -248,6 +248,9 @@ def tangent_space_approximation(
     featuremap_kwds["U"] = np.array(gauge_u).astype(np.float32, copy=True) # For visualization of local 
     featuremap_kwds["Singular_value"] = np.array(singular_values).astype(np.float32, copy=True) # For visualization of local 
     featuremap_kwds["VH"] = np.array(gauge_vh).astype(np.float32, copy=True)
+    T2 = time.time()
+    if featuremap_kwds['verbose']:
+        print(ts() + f' Local SVD time is {T2-T1}')
 
      # Before average 
     gauge_vh = featuremap_kwds["VH"].copy()
@@ -270,36 +273,64 @@ def tangent_space_approximation(
 
     # Set the Average times as the diameter of the graph
 
+    # from collections import deque
+    # def bfs_shortest_path(graph, start_vertex):
+    #     distances = {vertex: float('inf') for vertex in graph}
+    #     distances[start_vertex] = 0
+    #     queue = deque([start_vertex])
+
+    #     while queue:
+    #         current_vertex = queue.popleft()
+    #         current_distance = distances[current_vertex]
+
+    #         for neighbor in graph[current_vertex]:
+    #             if distances[neighbor] == float('inf'):  # Neighbor not visited
+    #                 distances[neighbor] = current_distance + 1
+    #                 queue.append(neighbor)
+    #     return distances
+        
+    # def calculate_diameter(G):
+    #     diameter = 0
+    #     # random sample 100 nodes
+    #     nodes = np.random.choice(G.nodes(), 50)
+    #     for node in nodes:
+    #         # Get shortest path lengths from 'node' to all other nodes
+    #         lengths = bfs_shortest_path(G, node)
+    #         # The longest path length from 'node' to any other node
+    #         max_length = max(lengths.values())
+    #         # Update diameter if the current max length is greater
+    #         if max_length > diameter:
+    #             diameter = max_length
+    #     return diameter
     from collections import deque
-    def bfs_shortest_path(graph, start_vertex):
-        distances = {vertex: float('inf') for vertex in graph}
-        distances[start_vertex] = 0
-        queue = deque([start_vertex])
+
+    def bfs(graph, start_node):
+        visited = set()
+        queue = deque([(start_node, 0)])  # (current_node, current_distance)
+        farthest_node = start_node
+        max_distance = 0
 
         while queue:
-            current_vertex = queue.popleft()
-            current_distance = distances[current_vertex]
+            current_node, distance = queue.popleft()
+            if distance > max_distance:
+                max_distance = distance
+                farthest_node = current_node
+            for neighbor in graph[current_node]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, distance + 1))
 
-            for neighbor in graph[current_vertex]:
-                if distances[neighbor] == float('inf'):  # Neighbor not visited
-                    distances[neighbor] = current_distance + 1
-                    queue.append(neighbor)
-        return distances
-        
-    def calculate_diameter(G):
-        diameter = 0
-        # random sample 100 nodes
-        nodes = np.random.choice(G.nodes(), 50)
-        for node in nodes:
-            # Get shortest path lengths from 'node' to all other nodes
-            lengths = bfs_shortest_path(G, node)
-            # The longest path length from 'node' to any other node
-            max_length = max(lengths.values())
-            # Update diameter if the current max length is greater
-            if max_length > diameter:
-                diameter = max_length
-        return diameter
+        return farthest_node, max_distance
+
+    def approximate_diameter(graph):
+        # Initial arbitrary node
+        A, _ = bfs(graph, next(iter(graph)))
+        B, _ = bfs(graph, A)
+        C, distance_BC = bfs(graph, B)
+        _, distance_CD = bfs(graph, C)
+        return max(distance_BC, distance_CD)
     
+    T1 = time.time()
     import networkx as nx
     graph_temp = graph.copy()
     # set graph to binary
@@ -308,12 +339,16 @@ def tangent_space_approximation(
 
     # repeat several times to get the average diameter
     s_time_average = 0
-    for i in range(3):
-        diameter = calculate_diameter(g)
+    for i in range(1):
+        diameter = approximate_diameter(g)
         # print(f'Diameter is {diameter}')
         s_time_average += int(diameter)
     
-    s_time_average = int(s_time_average/3 * 1.5)
+    T2 = time.time()    
+    if featuremap_kwds['verbose']:
+        print(ts() + f' Computing diameter time is {T2-T1}')
+    
+    s_time_average = int(s_time_average/1 * 1.5)
     
     if featuremap_kwds['verbose']:
         print(ts() + f' Average over {s_time_average} times')
@@ -698,7 +733,12 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     Variation embedding only
     '''
     if output_variation == True:
+        T1 = time.time()
         embedding = variation_embedding(data=data,featuremap_kwds=featuremap_kwds)  
+        T2 = time.time()
+        if verbose:
+            print(ts() + f' Variation_embedding time is {T2-T1}')
+
         return embedding
     else:    
 
@@ -1400,7 +1440,6 @@ class FeatureMAP(BaseEstimator):
             metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
-
 
     def fit(self, X):
         """Fit X into an embedded space.
