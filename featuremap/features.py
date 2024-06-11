@@ -96,8 +96,8 @@ def pseudotime_mst(adata, random_state, start_point_index):
     for i in range(2):
         # pairwise distances of knn graph
         # check if 'X_featmap_v_3d' exists in obsm
-        if 'X_featmap_v_3d' not in adata.obsm.keys():
-            adata.obsm['X_featmap_v_3d'] = featuremap_.FeatureMAP(n_components=3, output_variation=True,).fit_transform(adata.X)
+        # if 'X_featmap_v_3d' not in adata.obsm.keys():
+        adata.obsm['X_featmap_v_3d'] = featuremap_.FeatureMAP(n_components=3, output_variation=True,).fit_transform(adata.X)
 
         _, _,_,dists = fuzzy_simplicial_set(adata.obsm['X_featmap_v_3d'], n_neighbors=60, random_state=random_state,  
                                             metric='euclidean', metric_kwds={}, verbose=False, return_dists=True)
