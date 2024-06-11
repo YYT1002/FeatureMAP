@@ -94,7 +94,7 @@ def pseudotime_mst(adata, random_state, start_point_index):
 
     # Generate 2 embeddings for computing MST, and average the pseudotime
     pseudotime_mst = np.zeros(adata.shape[0])
-    for i in range(2):
+    for i in range(10):
         # pairwise distances of knn graph
         # check if 'X_featmap_v_3d' exists in obsm
         # if 'X_featmap_v_3d' not in adata.obsm.keys():
@@ -102,7 +102,8 @@ def pseudotime_mst(adata, random_state, start_point_index):
             emb_svd, _ = featuremap_._preprocess_data(adata.X)
             adata.obsm['X_svd'] = emb_svd
         emb_svd = adata.obsm['X_svd']
-        adata.obsm['X_featmap_v_3d'] = featuremap_.FeatureMAP(n_components=3, output_variation=True,).fit_transform(emb_svd)
+        rnd = np.random.RandomState(i)
+        adata.obsm['X_featmap_v_3d'] = featuremap_.FeatureMAP(n_components=3, output_variation=True,random_state=rnd).fit_transform(emb_svd)
 
         _, _,_,dists = fuzzy_simplicial_set(adata.obsm['X_featmap_v_3d'], n_neighbors=60, random_state=random_state,  
                                             metric='euclidean', metric_kwds={}, verbose=False, return_dists=True)
@@ -137,7 +138,7 @@ def pseudotime_mst(adata, random_state, start_point_index):
             adata.obs['feat_pseudotime'] = pseudotime_mst
             return pseudotime_mst
 
-    pseudotime_mst /= 2
+    pseudotime_mst /= 10
     from sklearn.preprocessing import MinMaxScaler
     pseudotime_mst = MinMaxScaler().fit_transform(pseudotime_mst.reshape(-1,1)).reshape(-1)
     adata.obs['feat_pseudotime'] = pseudotime_mst
