@@ -25,7 +25,7 @@ from scipy.stats import norm as normal
 
 from featuremap.core_transition_state import kernel_density_estimate
 
-from featuremap_ import _preprocess_data
+from featuremap.featuremap_ import _preprocess_data
 
 
 # Create adata object for plotting
