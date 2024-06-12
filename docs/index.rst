@@ -13,6 +13,7 @@
 
    notebooks/test_github_pancreas.ipynb
    notebooks/test_synthetic_data.ipynb
+   notebooks/test_github_cd8.ipynb
  
 .. toctree::
    :hidden:
