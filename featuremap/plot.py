@@ -40,7 +40,7 @@ def plot_density_pseudotime(filtered_data, pseudotime='feat_pseudotime', cluster
     
 
     ax.set_xlabel(pseudotime)
-    ax.set_ylabel('')
+    ax.set_ylabel(density)
     # ax.set_ylabel(density)
     # ax.legend().remove()
     # ax.set_xticks([])
