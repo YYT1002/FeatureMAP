@@ -188,7 +188,7 @@ def core_transition_state(
         # density = adata.obs['density'][cluster_in_cluster_label]
         cluster_index = leiden_clusters.index[leiden_clusters == cluster]
         density_sort = density[cluster_index].sort_values(ascending=False)
-        if int(len(cluster_index) * top_percent) > 50:
+        if int(len(cluster_index) * top_percent) < 50:
             density_sort_top20per_index = density_sort.index[:50]
         else:
             density_sort_top20per_index = density_sort.index[:int(len(cluster_index) * top_percent)]
