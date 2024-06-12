@@ -94,8 +94,21 @@ DISCONNECTION_DISTANCES = {
     "dice": 1,
 }
 
-from sklearn.neighbors import NearestNeighbors
 
+# Preprocess the data by singular value decomposition
+def _preprocess_data(X): 
+    T1 = time.time()
+    if X.shape[1] > 100:
+        print("Performing SVD decomposition on the data")
+        u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
+        X = np.matmul(u, np.diag(s))
+    else:
+        vh = np.eye(X.shape[1])
+    T2 = time.time()
+    print(f'SVD decomposition time is {T2-T1}')
+    return X, vh
+
+from sklearn.neighbors import NearestNeighbors
 def kernel_density_estimate(data, X, bw=0.5, min_radius=5, output_onlylogp=False, ):
         """
         Density estimation for data points specified by X with kernel density estimation.
@@ -171,67 +184,34 @@ def local_svd(
     gauge_vh: list of shape (n_neighbors_in_guage, d); store v
 
     """
-    gauge_u = [] # list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
-    singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
-    gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
     
-
-    if n_neighbors_in_guage < n_neighbors:
-        # use knn_index to collect n_neighbors_in_guage neighbors for each node;
-        # and collect corresponding weights
-        for row_i in range(data.shape[0]):
-            # skip the first point, the nearest on is itself
-            data_around_i_index = knn_index[row_i][1:n_neighbors_in_guage+1]
-            data_around_i = data[data_around_i_index] - data[row_i]
-            
-            weight_around_i = np.zeros(n_neighbors_in_guage, dtype=np.float32)
-            for neighbor_j in range(n_neighbors_in_guage):
-                neighbor_j_index = knn_index[row_i][neighbor_j+1]
-                weight_around_i[neighbor_j] = weight[row_i][neighbor_j_index]     
-                # idx = np.intersect1d(np.where(head==row_i)[0], np.where(tail==neighbor_j_index)[0])[0]
-                # weight_around_i[neighbor_j] = weight[idx]
-
-            # weighted SVD around i
-            # store first n_components rows of VH
-            weight_around_i = np.diag(weight_around_i) / np.sum(weight_around_i)
-            weight_around_i = np.sqrt(weight_around_i)
-            u, s, vh = np.linalg.svd(np.dot(weight_around_i, data_around_i), full_matrices=False)
-            gauge_u.append(u)
-            singular_values.append(s)
-            gauge_vh.append(vh)
-                    
-    else:
-        for row_i in range(data.shape[0]):
-            # Find KNNs row-by-row
+    gauge_u = []
+    singular_values = []
+    gauge_vh = []
+    
+    for row_i in numba.prange(data.shape[0]):
+        if n_neighbors_in_guage < n_neighbors:
+            indices = knn_index[row_i, 1:n_neighbors_in_guage+1].astype(np.int64)
+        else:
             row_weight = weight[row_i]
-            
-            # if len(row_weight) < n_neighbors_in_guage:
-            #     raise ValueError(
-            #         "Some rows contain fewer than n_neighbors distances!"
-            #     )
-            #  val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i])))
-            data_around_i_index = np.argsort(-row_weight)[1: n_neighbors_in_guage+1]
-            # print('data_around_i_index, ' + str(data_around_i_index))
-            data_around_i = data[data_around_i_index] - data[row_i]
-            
-            weight_around_i = np.zeros(n_neighbors_in_guage, dtype=np.float32)
-            for neighbor_j in range(n_neighbors_in_guage):
-                neighbor_j_index = data_around_i_index[neighbor_j]
-                weight_around_i[neighbor_j] = weight[row_i][neighbor_j_index]
-                # idx = np.intersect1d(np.where(head==row_i)[0], np.where(tail==neighbor_j_index)[0])[0]
-                # weight_around_i[neighbor_j] = weight[idx]
-                
-            # weighted SVD around i
-            # store first n_components rows of VH
-            weight_around_i = np.diag(weight_around_i) / np.sum(weight_around_i)
-            weight_around_i = np.sqrt(weight_around_i)
-            u, s, vh = np.linalg.svd(np.dot(weight_around_i, data_around_i), full_matrices=False)
-            gauge_u.append(u)
-            singular_values.append(s)
-            gauge_vh.append(vh)
-            
-    return  gauge_u, singular_values, gauge_vh
-     
+            indices = np.argsort(-row_weight)[1:n_neighbors_in_guage+1].astype(np.int64)
+
+        data_around_i = data[indices] - data[row_i]
+        
+        weights_around_i = weight[row_i, indices]
+        weight_diag = np.diag(weights_around_i / np.sum(weights_around_i))
+        weight_sqrt = np.sqrt(weight_diag)
+        
+        u, s, vh = np.linalg.svd(np.dot(weight_sqrt, data_around_i), full_matrices=False)
+        
+        gauge_u.append(u)
+        singular_values.append(s)
+        gauge_vh.append(vh)
+
+    return gauge_u, singular_values, gauge_vh
+
+    return gauge_u, singular_values, gauge_vh
+                 
 
 # @numba.njit()
 def tangent_space_approximation(
@@ -269,7 +249,7 @@ def tangent_space_approximation(
     singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
     gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
     
-        
+    T1 = time.time()
     gauge_u,singular_values, gauge_vh = local_svd(
             data,
             knn_index,
@@ -281,6 +261,9 @@ def tangent_space_approximation(
     featuremap_kwds["U"] = np.array(gauge_u).astype(np.float32, copy=True) # For visualization of local 
     featuremap_kwds["Singular_value"] = np.array(singular_values).astype(np.float32, copy=True) # For visualization of local 
     featuremap_kwds["VH"] = np.array(gauge_vh).astype(np.float32, copy=True)
+    T2 = time.time()
+    if featuremap_kwds['verbose']:
+        print(ts() + f' Local SVD time is {T2-T1}')
 
      # Before average 
     gauge_vh = featuremap_kwds["VH"].copy()
@@ -303,36 +286,64 @@ def tangent_space_approximation(
 
     # Set the Average times as the diameter of the graph
 
+    # from collections import deque
+    # def bfs_shortest_path(graph, start_vertex):
+    #     distances = {vertex: float('inf') for vertex in graph}
+    #     distances[start_vertex] = 0
+    #     queue = deque([start_vertex])
+
+    #     while queue:
+    #         current_vertex = queue.popleft()
+    #         current_distance = distances[current_vertex]
+
+    #         for neighbor in graph[current_vertex]:
+    #             if distances[neighbor] == float('inf'):  # Neighbor not visited
+    #                 distances[neighbor] = current_distance + 1
+    #                 queue.append(neighbor)
+    #     return distances
+        
+    # def calculate_diameter(G):
+    #     diameter = 0
+    #     # random sample 100 nodes
+    #     nodes = np.random.choice(G.nodes(), 50)
+    #     for node in nodes:
+    #         # Get shortest path lengths from 'node' to all other nodes
+    #         lengths = bfs_shortest_path(G, node)
+    #         # The longest path length from 'node' to any other node
+    #         max_length = max(lengths.values())
+    #         # Update diameter if the current max length is greater
+    #         if max_length > diameter:
+    #             diameter = max_length
+    #     return diameter
     from collections import deque
-    def bfs_shortest_path(graph, start_vertex):
-        distances = {vertex: float('inf') for vertex in graph}
-        distances[start_vertex] = 0
-        queue = deque([start_vertex])
+
+    def bfs(graph, start_node):
+        visited = set()
+        queue = deque([(start_node, 0)])  # (current_node, current_distance)
+        farthest_node = start_node
+        max_distance = 0
 
         while queue:
-            current_vertex = queue.popleft()
-            current_distance = distances[current_vertex]
+            current_node, distance = queue.popleft()
+            if distance > max_distance:
+                max_distance = distance
+                farthest_node = current_node
+            for neighbor in graph[current_node]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, distance + 1))
 
-            for neighbor in graph[current_vertex]:
-                if distances[neighbor] == float('inf'):  # Neighbor not visited
-                    distances[neighbor] = current_distance + 1
-                    queue.append(neighbor)
-        return distances
-        
-    def calculate_diameter(G):
-        diameter = 0
-        # random sample 100 nodes
-        nodes = np.random.choice(G.nodes(), 50)
-        for node in nodes:
-            # Get shortest path lengths from 'node' to all other nodes
-            lengths = bfs_shortest_path(G, node)
-            # The longest path length from 'node' to any other node
-            max_length = max(lengths.values())
-            # Update diameter if the current max length is greater
-            if max_length > diameter:
-                diameter = max_length
-        return diameter
+        return farthest_node, max_distance
+
+    def approximate_diameter(graph):
+        # Initial arbitrary node
+        A, _ = bfs(graph, next(iter(graph)))
+        B, _ = bfs(graph, A)
+        C, distance_BC = bfs(graph, B)
+        _, distance_CD = bfs(graph, C)
+        return max(distance_BC, distance_CD)
     
+    T1 = time.time()
     import networkx as nx
     graph_temp = graph.copy()
     # set graph to binary
@@ -341,12 +352,16 @@ def tangent_space_approximation(
 
     # repeat several times to get the average diameter
     s_time_average = 0
-    for i in range(3):
-        diameter = calculate_diameter(g)
+    for i in range(1):
+        diameter = approximate_diameter(g)
         # print(f'Diameter is {diameter}')
         s_time_average += int(diameter)
     
-    s_time_average = int(s_time_average/3 * 1.5)
+    T2 = time.time()    
+    if featuremap_kwds['verbose']:
+        print(ts() + f' Computing diameter time is {T2-T1}')
+    
+    s_time_average = int(s_time_average/1 * 1.5)
     
     if featuremap_kwds['verbose']:
         print(ts() + f' Average over {s_time_average} times')
@@ -731,7 +746,12 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     Variation embedding only
     '''
     if output_variation == True:
+        T1 = time.time()
         embedding = variation_embedding(data=data,featuremap_kwds=featuremap_kwds)  
+        T2 = time.time()
+        if verbose:
+            print(ts() + f' Variation_embedding time is {T2-T1}')
+
         return embedding
     else:    
 
@@ -901,7 +921,7 @@ def simplicial_set_embedding_with_tangent_space_embedding(
         
     return embedding
         
-        
+
 
 
 
@@ -1433,6 +1453,7 @@ class FeatureMAP(BaseEstimator):
             metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
+    
 
 
     def fit(self, X):
@@ -1446,13 +1467,15 @@ class FeatureMAP(BaseEstimator):
             is 'exact', X may be a sparse matrix of type 'csr', 'csc'
             or 'coo'.
         """
-
-        # SVD decompostion of data 
-        if X.shape[1] > 100:
-            u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
-            X = np.matmul(u, np.diag(s))
-        else:
-            vh = np.eye(X.shape[1])
+  
+        # # SVD decompostion of data 
+        # if X.shape[1] > 100:
+        #     if self.verbose:
+        #         print("Performing SVD decomposition on the data")
+        #     u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
+        #     X = np.matmul(u, np.diag(s))
+        # else:
+        #     vh = np.eye(X.shape[1])
 
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         self._raw_data = X
@@ -1474,7 +1497,7 @@ class FeatureMAP(BaseEstimator):
         self._validate_parameters()
 
         # SVD decomposition of data
-        self._featuremap_kwds['svd_vh'] = vh.T
+        # self._featuremap_kwds['svd_vh'] = vh.T
 
         if self.verbose:
             print(str(self))
