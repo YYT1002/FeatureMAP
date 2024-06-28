@@ -43,11 +43,6 @@ These enhancements allow for differential gene variation (DGV) analysis, highlig
 pip install featuremap-learn
 ```
 
-### 2. Installation via Conda
-For users who prefer using Conda, especially for managing complex dependencies and environments in scientific computing.
-```
-conda install ???
-```
 
 ## How to use FeatureMAP
 
