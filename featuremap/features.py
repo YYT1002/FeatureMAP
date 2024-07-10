@@ -991,11 +991,14 @@ def plot_one_feature(
     expr_grid = (expr_count[neighs] * weight).sum(1)
     expr_grid /= np.maximum(1, p_mass)
     
+    print('V_grid_1:', V_grid)
+
     # Filter the expr_velo by low expression 
     threshold = max(expr_grid) * ratio
     # feature_velo_loading = pc_loadings_grid[:,:,feature_id]
     V_grid[expr_grid<threshold]=np.nan
-    
+    print('V_grid', V_grid)
+
     min_mass *= np.percentile(p_mass, 99) / 100
     # min_mass = 0.01
     X_grid, V_grid = X_grid[p_mass > min_mass], V_grid[p_mass > min_mass]
