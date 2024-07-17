@@ -353,8 +353,12 @@ def tangent_space_approximation(
     # repeat several times to get the average diameter
     s_time_average = 0
     for i in range(1):
+        
         diameter = approximate_diameter(g)
-        # print(f'Diameter is {diameter}')
+        # if diameter is inf
+        if diameter == np.inf:
+            diameter = int(np.log(data.shape[0]))
+        print(f'Diameter is {diameter}')
         s_time_average += int(diameter)
     
     T2 = time.time()    

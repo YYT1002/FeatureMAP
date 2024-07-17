@@ -319,11 +319,14 @@ def plot_gauge_both(
         Scale the arrow plot. The default is True.
             
     """
+    print('Plotting gauge embedding')
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
     # X_emb=adata.obsm[embedding]
     vkey='gauge_v1_emb'
     V_emb=adata.obsm[vkey] 
+    # Normalize the V_emb
+    V_emb = V_emb / np.linalg.norm(V_emb, axis=1)[:, np.newaxis]
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
     X_emb = X_emb[idx_valid]
     V_emb = V_emb[idx_valid]
