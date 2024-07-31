@@ -51,25 +51,7 @@ from scipy.sparse import tril as sparse_tril, triu as sparse_triu
 import scipy.sparse.csgraph
 import numba
 
-# import featuremap.distances as dist
 
-# import featuremap.sparse as sparse
-
-# from featuremap.utils import (
-#     submatrix,
-#     ts,
-#     csr_unique,
-#     fast_knn_indices,
-# )
-# from featuremap.spectral import spectral_layout
-
-
-# from featuremap.layouts import (
-#     # optimize_layout_euclidean,
-#     optimize_layout_euclidean_anisotropic_projection,
-#     # optimize_layout_generic,
-#     # optimize_layout_inverse,
-# )
 
 # from featuremap.core_transition_state import kernel_density_estimate
 
@@ -353,7 +335,6 @@ def tangent_space_approximation(
     # repeat several times to get the average diameter
     s_time_average = 0
     for i in range(1):
-        
         diameter = approximate_diameter(g)
         # if diameter is inf
         if diameter == np.inf:
@@ -394,6 +375,121 @@ def tangent_space_approximation(
     featuremap_kwds["vh_smoothed"] = np.array(gauge_vh).astype(np.float32, copy=True)
 
 
+@ numba.njit()
+def project_gauge_to_knn_graph( 
+        data,
+        graph,
+        featuremap_kwds,):
+    """
+    Project the gauge (rotation matrix) to the KNN graph and compute the transition probability matrix
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The source data to be embedded by FeatureMAP.
+    graph: sparse matrix
+        The 1-skeleton of the high dimensional fuzzy simplicial set as
+        represented by a graph for which we require a sparse matrix for the
+        (weighted) adjacency matrix.
+    featuremap_kwds: dict
+        Key word arguments to be used by the FeatureMAP optimization.
+
+    Returns
+    -------
+    transition_matrix: array of shape (n_samples, n_samples)
+        The transition probability matrix
+    """
+    # for each edge, compute the transition probability by the (normalized) cosine similarity between edge and the gauge
+
+    gauge_v1 = featuremap_kwds["vh_smoothed"][:,0,:]
+    gauge_v2 = featuremap_kwds["vh_smoothed"][:,1,:]
+
+    head = graph.row
+    tail = graph.col
+
+    # Probability transition matrix for gauge v1 and v2
+    T_v1 = np.zeros((data.shape[0], data.shape[0]))
+    T_v2 = np.zeros((data.shape[0], data.shape[0]))
+
+    for i in range(len(head)):
+        j = head[i]
+        k = tail[i]
+        # edge vector
+        edge_vector = data[k] - data[j]
+        edge_vector = edge_vector
+
+        # gauge vector
+        gauge_vector_v1 = gauge_v1[j]
+        gauge_vector_v2 = gauge_v2[j]
+
+        # cosine similarity
+        T_v1[j,k] = np.dot(edge_vector, gauge_vector_v1) / (np.linalg.norm(edge_vector) * np.linalg.norm(gauge_vector_v1))
+        T_v2[j,k] = np.dot(edge_vector, gauge_vector_v2) / (np.linalg.norm(edge_vector) * np.linalg.norm(gauge_vector_v2))
+
+    # Apply the softmax function to the transition probability matrix
+    T_v1 = np.expm1(T_v1)
+    T_v2 = np.expm1(T_v2)
+            
+    # Normalize the transition probability matrix by knn neighbors
+    T_v1 = T_v1 / np.sum(T_v1, axis=1)[:, np.newaxis]
+    T_v2 = T_v2 / np.sum(T_v2, axis=1)[:, np.newaxis]
+
+    featuremap_kwds["T_v1"] = T_v1
+    featuremap_kwds["T_v2"] = T_v2
+
+
+   
+
+
+# Recover the gauge in low dimensional from the low-dimensional embedding 
+def recover_gauge_from_embedding(
+        data_embedding,
+        featuremap_kwds,
+        ):
+    """
+    Recover the gauge from the low-dimensional embedding
+
+    Parameters
+    ----------
+    data_embedding: array of shape (n_samples, n_components)
+        The low-dimensional embedding of the data
+    featuremap_kwds: dict
+
+    Returns
+    -------
+    gauge_v1_recover: array of shape (n_samples, n_components)
+        The recovered gauge v1 in low dimesional space
+    gauge_v2_recover: array of shape (n_samples, n_components)
+        The recovered gauge v2 in low dimensional space
+    """
+
+    knn_indices = featuremap_kwds["_knn_indices"]
+    T_v1 = featuremap_kwds["T_v1"]
+    T_v2 = featuremap_kwds["T_v2"]
+
+    # Modify the transition probability matrix by minus 1/n
+    T_v1 = T_v1 - 1/data_embedding.shape[0]
+    T_v2 = T_v2 - 1/data_embedding.shape[0]
+
+    # Recover the gauge from the low-dimensional embedding by the expectation of displacement over the transition probability matrix
+
+    displacement = data_embedding - data_embedding[:, np.newaxis, :] # shape (n_samples, n_samples, n_components)
+
+    # T_v1[:, np.newaxis, :] with shape (n_samples, 1, n_samples)
+    gauge_v1_recover = np.matmul(T_v1[:, np.newaxis, :], displacement) # shape (n_samples, 1, n_components)
+    gauge_v2_recover = np.matmul(T_v2[:, np.newaxis, :], displacement)
+
+    gauge_v1_recover = np.squeeze(gauge_v1_recover, axis=1)
+    gauge_v2_recover = np.squeeze(gauge_v2_recover, axis=1)
+
+    featuremap_kwds["gauge_v1_recover"] = gauge_v1_recover
+    featuremap_kwds["gauge_v2_recover"] = gauge_v2_recover
+
+
+
+ 
+
+
         
 def tangent_space_embedding(
         featuremap_kwds,
@@ -415,12 +511,13 @@ def tangent_space_embedding(
     n_neighbors = featuremap_kwds["n_neighbors"]
     metric = featuremap_kwds["metric"]
     min_dist = featuremap_kwds["min_dist"]
+    n_epochs = featuremap_kwds["n_epochs"]
 
     gauge_vh = featuremap_kwds["vh_smoothed"].copy()
-        
-    # umap embedding
+
+
+    # First largest PC
     # T1 = time.time()
-    # gauge_vh = gauge_vh_mean
     gauge_vh_copy = gauge_vh.copy()
     rotation_matrix = np.array(gauge_vh_copy)[:,0,:]
     
@@ -431,7 +528,7 @@ def tangent_space_embedding(
     
     import umap
     # print('random_state', random_state)
-    umap_embedding = umap.UMAP(n_neighbors=n_neighbors,random_state=random_state, metric=metric,min_dist=min_dist).fit_transform(X=X_pca)
+    umap_embedding = umap.UMAP(n_neighbors=n_neighbors,random_state=random_state, metric=metric,min_dist=min_dist, n_epochs=int(n_epochs/2)).fit_transform(X=X_pca)
     # umap_embedding = umap.UMAP(n_neighbors=30, metric='euclidean',min_dist=0.5).fit_transform(X=X_pca)
     featuremap_kwds['gauge_v1_emb'] = umap_embedding
     # T2 = time.time()
@@ -451,7 +548,7 @@ def tangent_space_embedding(
     X_pca = pca.fit_transform(rotation_matrix)
     
     
-    umap_embedding = umap.UMAP(n_neighbors=n_neighbors,random_state=random_state, metric=metric,min_dist=min_dist).fit_transform(X=X_pca)
+    umap_embedding = umap.UMAP(n_neighbors=n_neighbors,random_state=random_state, metric=metric,min_dist=min_dist, n_epochs=int(n_epochs/2)).fit_transform(X=X_pca)
     # umap_embedding = umap.UMAP(n_neighbors=30,  metric='euclidean',min_dist=0.5).fit_transform(X=X_pca)
     featuremap_kwds['gauge_v2_emb'] = umap_embedding
     
@@ -462,6 +559,75 @@ def tangent_space_embedding(
     gauge_vh_mean_embedding[:,1,1] = umap_embedding[:, 1]/umap_embedding_norm
 
     featuremap_kwds["VH_embedding"] = np.array(gauge_vh_mean_embedding).astype(np.float32, copy=True) # VH_embedding after average
+  
+      
+    # # First largest PC
+    # # T1 = time.time()
+    # gauge_vh_copy = gauge_vh.copy()
+    # rotation_matrix = np.array(gauge_vh_copy)[:,0,:]
+    
+    # # from sklearn.decomposition import TruncatedSVD
+    # from sklearn.decomposition import PCA
+    # pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
+    # X_pca = pca.fit_transform(rotation_matrix)
+
+    # # Spectral embedding
+    # graph, _, _ = fuzzy_simplicial_set(
+    #                 X_pca,
+    #                 n_neighbors,
+    #                 random_state,
+    #                 metric,
+    #                 )
+
+    # spectral_embedding = spectral_layout(
+    #         X_pca,
+    #         graph,
+    #         dim=2,
+    #         random_state=random_state,
+    #         metric=metric,
+    #     )
+    
+    # featuremap_kwds['gauge_v1_emb'] = spectral_embedding
+    # # T2 = time.time()
+    # # print(f'UMAP time is {T2-T1}')
+    
+    # spectral_embedding_norm = np.linalg.norm(spectral_embedding, axis=1)
+        
+    # # gauge_vh_embedding is embedding of VH
+    # gauge_vh_mean_embedding = np.zeros([spectral_embedding.shape[0], spectral_embedding.shape[1],2])
+    # gauge_vh_mean_embedding[:,0,0] = spectral_embedding[:, 0]/spectral_embedding_norm
+    # gauge_vh_mean_embedding[:,0,1] = spectral_embedding[:, 1]/spectral_embedding_norm
+    
+    
+    # # Second largest PC
+    # rotation_matrix = np.array(gauge_vh_copy)[:,1,:]
+    # pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
+    # X_pca = pca.fit_transform(rotation_matrix)
+    
+    #  # Spectral embedding
+    # graph, _, _ = fuzzy_simplicial_set(
+    #                 X_pca,
+    #                 n_neighbors,
+    #                 random_state,
+    #                 metric,
+    #                 )
+
+    # spectral_embedding = spectral_layout(
+    #         X_pca,
+    #         graph,
+    #         dim=2,
+    #         random_state=random_state,
+    #         metric=metric,
+    #     )
+    # featuremap_kwds['gauge_v2_emb'] = spectral_embedding
+    
+    # spectral_embedding_norm = np.linalg.norm(spectral_embedding, axis=1)
+    
+    # # gauge_vh_embedding is embedding of VH
+    # gauge_vh_mean_embedding[:,1,0] = spectral_embedding[:, 0]/spectral_embedding_norm
+    # gauge_vh_mean_embedding[:,1,1] = spectral_embedding[:, 1]/spectral_embedding_norm
+
+    # featuremap_kwds["VH_embedding"] = np.array(gauge_vh_mean_embedding).astype(np.float32, copy=True) # VH_embedding after average
   
    
 
@@ -801,6 +967,7 @@ def simplicial_set_embedding_with_tangent_space_embedding(
             * (embedding - np.min(embedding, 0))
             / (np.max(embedding, 0) - np.min(embedding, 0))
         ).astype(np.float32, order="C")
+        
         if verbose:
             print(ts() + ' Start optimizing layout')
         T1 = time.time()
@@ -1398,6 +1565,7 @@ class FeatureMAP(BaseEstimator):
             "spread": self.spread,
             "n_components": self.n_components,
             "verbose": self.verbose,
+            "n_epochs": self.n_epochs,
             
         }
         if self.output_variation:
@@ -2174,192 +2342,6 @@ def _optimize_layout_euclidean_single_epoch_grad(
             )
 
 
-
-# def _optimize_layout_euclidean_single_epoch_grad(
-#     head_embedding,
-#     tail_embedding,
-#     head,
-#     tail,
-#     n_vertices,
-#     epochs_per_sample,
-#     a,
-#     b,
-#     rng_state,
-#     gamma,
-#     dim,
-#     move_other,
-#     alpha,
-#     epochs_per_negative_sample,
-#     epoch_of_next_negative_sample,
-#     epoch_of_next_sample,
-#     n,
-#     featuremap_flag,
-#     feat_phi_sum,
-#     feat_re_sum,
-#     feat_re_cov,
-#     feat_re_std,
-#     feat_re_mean,
-#     feat_lambda,
-#     feat_R,
-#     feat_VH_embedding,
-#     feat_mu,
-#     feat_mu_tot,
-    
-# ):  
-#     # print('epochs_per_sample.shape[0]' + str(epochs_per_sample.shape[0]))
-#     for i in numba.prange(epochs_per_sample.shape[0]):
-#         if epoch_of_next_sample[i] <= n:
-#             j = head[i]
-#             k = tail[i]
-
-#             current = head_embedding[j]
-#             other = tail_embedding[k]
-            
-#             # vec_diff = vdiff(current, other)
-#             vec_diff = other - current
-
-#             inner_product = np.dot(vec_diff, vec_diff)
-#             outer_product = np.outer(vec_diff, vec_diff)
-            
-#             grad_d = np.zeros(dim, dtype=np.float32)
-            
-#             #dim = 1
-#             # random select a dimension from dim
-#             d = tau_rand_int(rng_state) % dim
-#             # print('featuremap_flag' + str(featuremap_flag))
-#             if featuremap_flag:
-#                 current_VH = feat_VH_embedding[j] # rotation matrix embedding;  
-#                 other_VH = feat_VH_embedding[k]
-                
-#                 grad_cor_coeff = np.zeros(dim, dtype=np.float32)
-
-#                 # TODO: focus on each d of dim
-#                 # for d in numba.prange(dim):
-#                 phi = 1.0 / (1.0 + a * pow(inner_product, b))
-#                 dphi_term = (
-#                     2 * a * b * pow(inner_product, b - 1) * vec_diff / 
-#                     (1.0 + a * pow(inner_product, b))
-#                 )
-
-#                 v_j = current_VH[d]
-#                 v_k = other_VH[d]
-#                 project_vec_j = np.dot(v_j, vec_diff)
-#                 project_vec_k = np.dot(v_k, vec_diff)
-
-#                 #TODO: check feat_phi_sum, feat_re_sum
-#                 # Have changed the order of j, k
-#                 q_jk = phi / feat_phi_sum[j]
-#                 q_kj = phi / feat_phi_sum[k]
-                
-#                 #######################
-#                 # drj = q_jk * (
-#                 #     project_vec_j * (2 * v_j -  project_vec_j * dphi_term ) / np.exp(feat_re_sum[j,d]) + dphi_term
-#                 # )
-#                 # drk = q_kj * (
-#                 #     project_vec_k * (2 * v_k -  project_vec_k * dphi_term ) / np.exp(feat_re_sum[k,d]) + dphi_term
-#                 # )
-#                 ############################
-
-#                 drj = np.zeros(dim)
-#                 drk = np.zeros(dim)
-#                 # for s in numba.prange(dim):
-#                 s = d
-#                 drj[s] = q_jk * (
-#                     project_vec_j * (2 * v_j[s] -  project_vec_j * dphi_term[s] ) / np.exp(feat_re_sum[j,d]) + dphi_term[s]
-#                 )
-#                 drk[s] = q_kj * (
-#                     project_vec_k * (2 * v_k[s] -  project_vec_k * dphi_term[s] ) / np.exp(feat_re_sum[k,d]) + dphi_term[s]
-#                 )
-                
-#                 # check feat_re_std: array shape (dim,)
-#                 re_std_sq = feat_re_std[d] * feat_re_std[d]
-                
-        
-#                 weight_j = (
-#                     feat_R[j,d]
-#                     - feat_re_cov[d] * (feat_re_sum[j,d] - feat_re_mean[d]) / re_std_sq
-#                 )
-#                 weight_k = (
-#                     feat_R[k,d]
-#                     - feat_re_cov[d] * (feat_re_sum[k,d] - feat_re_mean[d]) / re_std_sq
-#                 )
-
-#                 # for s in numba.prange(dim):
-#                 s = d
-#                 grad_cor_coeff[s] += (weight_j * drj[s] + weight_k * drk[s]) / feat_re_std[d]
-
-#                 # for s in numba.prange(dim):
-#                 s = d
-#                 grad_cor_coeff[s] = (
-#                     grad_cor_coeff[s]
-#                     * feat_lambda
-#                     * feat_mu_tot
-#                     / feat_mu[i]
-#                     / n_vertices
-#                 )
-
-#             # grad_coeff = np.zeros(dim, dtype=np.float32)
-#             if inner_product > 0.0:
-#                 # gradient of log Q_jk 
-#                 grad_coeff_term = (-2.0) * a * b * pow(inner_product, b - 1.0) 
-#                 grad_coeff_term = grad_coeff_term / (a * pow(inner_product, b) + 1.0)
-#             else:
-#                 grad_coeff_term = 0
-
-#             ###############################  
-#             # gradient w.r.t y_j; sampling edge (j,k), Z_jk = y_k - y_j 
-#             # grad_d = clip_arr(* vec_diff[d]) * vec_diff[d] * (-1.0)
-#             ###############################
-#             for d in numba.prange(dim):
-#                 grad_d = clip(grad_coeff_term * vec_diff[d] * (-1.0))
-#                 # grad_d = grad_coeff[d] * (-1.0) * vec_diff[d]
-
-#                 if featuremap_flag:
-#                     # FIXME: grad_cor_coeff might be referenced before assignment
-#                     grad_d += clip(grad_cor_coeff[d] * (-1.0))
-                
-#                 # 
-#                 current[d] += grad_d * alpha
-#                 if move_other:
-#                     other[d] += -grad_d * alpha
-
-#             epoch_of_next_sample[i] += epochs_per_sample[i]
-
-#             n_neg_samples = int(
-#                 (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
-#             )
-
-#             for p in numba.prange(n_neg_samples):
-#                 k = tau_rand_int(rng_state) % n_vertices
-
-#                 other = tail_embedding[k]
-
-#                 # vec_diff = vdiff(current, other)
-#                 vec_diff = other - current
-#                 inner_product = np.dot(vec_diff, vec_diff)
-                
-#                 if inner_product > 0.0:
-#                     grad_coeff_term = 2.0 * gamma * b
-#                     #divisor = np.repeat((0.001 + inner_product) * (a * pow(inner_product, b) + 1), dim)
-#                     grad_coeff_term = grad_coeff_term / ((0.001 + inner_product) * (a * pow(inner_product, b) + 1))
-#                 elif j == k:
-#                     continue
-#                 else:
-#                     grad_coeff_term = 0.0
-                
-
-#                 for d in numba.prange(dim):
-#                     if grad_coeff_term > 0.0:
-#                         grad_d = clip(grad_coeff_term * vec_diff[d] * (-1.0))
-#                     else:
-#                         grad_d = 4.0 
-#                     current[d] += grad_d * alpha
-
-#             epoch_of_next_negative_sample[i] += (
-#                 n_neg_samples * epochs_per_negative_sample[i]
-#             )
-
-
 # Compute the variance in each direction of embedding under rotation VH 
 def _optimize_layout_euclidean_featuremap_epoch_init_grad(
     head_embedding,
@@ -2547,7 +2529,7 @@ def optimize_layout_euclidean_anisotropic_projection(
            _optimize_layout_euclidean_single_epoch_grad, 
            fastmath=True, 
            parallel=parallel,
-           nopython=True,
+         # nopython=True,
            cache=True
     )
     # optimize_fn = _optimize_layout_euclidean_single_epoch_grad
@@ -2562,7 +2544,7 @@ def optimize_layout_euclidean_anisotropic_projection(
          _optimize_layout_euclidean_featuremap_epoch_init_grad,
          fastmath=True,
          parallel=parallel,
-         nopython=True,
+        #  nopython=True,
          cache=True
     )
     
@@ -2607,9 +2589,7 @@ def optimize_layout_euclidean_anisotropic_projection(
         # print(f'featuremap_flag_{featuremap_flag}')
         if featuremap_flag:
             # FIXME: feat_init_fn might be referenced before assignment
-            
             # Compute the initial embedding under rotation VH
-            # print('feat_re_sum, ' + str(feat_re_sum))
             # T1 = time.time()
             feat_init_fn(
                 head_embedding,
@@ -2673,6 +2653,7 @@ def optimize_layout_euclidean_anisotropic_projection(
             feat_mu,
             feat_mu_tot,
         )
+
         # T2 = time.time()
         # print(f'Optimize_fn time is {T2-T1}')
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))

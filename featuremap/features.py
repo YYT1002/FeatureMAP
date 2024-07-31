@@ -221,6 +221,10 @@ def plot_gauge(
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
     # X_emb=adata.obsm[embedding]
     V_emb=adata.obsm[vkey] 
+
+    # Normalize the V_emb
+    V_emb = V_emb / np.linalg.norm(V_emb, axis=1)[:, np.newaxis]
+    
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
     X_emb = X_emb[idx_valid]
     V_emb = V_emb[idx_valid]
@@ -281,7 +285,11 @@ def plot_gauge(
     plt.title('Eigengene')
     plt.xticks([])
     plt.yticks([])
-    plt.quiver(X_grid[:,0], X_grid[:,1],V_grid[:,0],V_grid[:,1],color='black',alpha=1,scale=3)
+    qv = plt.quiver(X_grid[:,0], X_grid[:,1],V_grid[:,0],V_grid[:,1],color='black',alpha=1,scale=3)
+
+    legend = plt.legend([qv], [vkey])
+    legend.set_bbox_to_anchor((1, 1))  # Set the shape of the legend
+    plt.show()
     # plt.show()
     # plt.clf()
     
@@ -319,14 +327,16 @@ def plot_gauge_both(
         Scale the arrow plot. The default is True.
             
     """
-    print('Plotting gauge embedding')
+    print('Plotting gauge embedding') 
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
     # X_emb=adata.obsm[embedding]
     vkey='gauge_v1_emb'
     V_emb=adata.obsm[vkey] 
+
     # Normalize the V_emb
     V_emb = V_emb / np.linalg.norm(V_emb, axis=1)[:, np.newaxis]
+
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
     X_emb = X_emb[idx_valid]
     V_emb = V_emb[idx_valid]
@@ -394,6 +404,8 @@ def plot_gauge_both(
     # X_emb=adata.obsm[embedding]
     vkey='gauge_v2_emb'
     V_emb=adata.obsm[vkey] 
+    # Normalize the V_emb
+    V_emb = V_emb / np.linalg.norm(V_emb, axis=1)[:, np.newaxis]
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
     X_emb = X_emb[idx_valid]
     V_emb = V_emb[idx_valid]
@@ -459,7 +471,7 @@ def plot_gauge_both(
     # create a legend by arrows, red for v1, blue for v2
     legend = plt.legend([qv1, qv2], ['v1', 'v2'])
     legend.set_bbox_to_anchor((1, 1))  # Set the shape of the legend
-    # plt.show()
+    plt.show()
     # plt.clf()
     
     
@@ -994,13 +1006,13 @@ def plot_one_feature(
     expr_grid = (expr_count[neighs] * weight).sum(1)
     expr_grid /= np.maximum(1, p_mass)
     
-    print('V_grid_1:', V_grid)
+    # print('V_grid_1:', V_grid)
 
     # Filter the expr_velo by low expression 
     threshold = max(expr_grid) * ratio
     # feature_velo_loading = pc_loadings_grid[:,:,feature_id]
     V_grid[expr_grid<threshold]=np.nan
-    print('V_grid', V_grid)
+    # print('V_grid', V_grid)
 
     min_mass *= np.percentile(p_mass, 99) / 100
     # min_mass = 0.01
