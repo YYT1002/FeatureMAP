@@ -179,7 +179,7 @@ def quiver_autoscale(X_emb, V_emb):
     Q._init()
     fig.clf()
     plt.close(fig)
-    return Q.scale / scale_factor * 5
+    return Q.scale / scale_factor
 
 
 
