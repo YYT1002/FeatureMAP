@@ -13,6 +13,7 @@ from __future__ import print_function
 import locale
 from warnings import warn
 import time
+import warnings
 
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
@@ -347,7 +348,7 @@ def tangent_space_approximation(
         print(ts() + f' Computing diameter time is {T2-T1}')
     
     s_time_average = int(s_time_average/1 * 1.5)
-    
+
     if featuremap_kwds['verbose']:
         print(ts() + f' Average over {s_time_average} times')
 
@@ -364,9 +365,15 @@ def tangent_space_approximation(
             # i = 0
             # knn_index_images = adata.obsm['knn_indices'][i]
             X_mean = np.mean(gauge_vh[knn_index[i],:,:], axis=0)
+            # normalize the mean
+            X_mean = X_mean / np.linalg.norm(X_mean, axis=1)[:, np.newaxis]
             gauge_vh_mean.append(X_mean)
             i=i+1
         gauge_vh = np.array(gauge_vh_mean)
+
+        # save the first average to VH 
+        if s == 0:
+            featuremap_kwds["VH"] = np.array(gauge_vh).astype(np.float32, copy=True)
         s=s+1
     T2 = time.time()
     if featuremap_kwds['verbose']:
@@ -375,13 +382,15 @@ def tangent_space_approximation(
     featuremap_kwds["vh_smoothed"] = np.array(gauge_vh).astype(np.float32, copy=True)
 
 
-@ numba.njit()
 def project_gauge_to_knn_graph( 
         data,
         graph,
-        featuremap_kwds,):
+        featuremap_kwds,
+        scale=10,
+        use_negative_cosines=False,):
     """
     Project the gauge (rotation matrix) to the KNN graph and compute the transition probability matrix
+    Modified from the scVelo: https://scvelo.readthedocs.io/en/stable/scvelo.utils.get_transition_matrix.html#scvelo.utils.get_transition_matrix
 
     Parameters
     ----------
@@ -393,6 +402,10 @@ def project_gauge_to_knn_graph(
         (weighted) adjacency matrix.
     featuremap_kwds: dict
         Key word arguments to be used by the FeatureMAP optimization.
+    scale: float
+        The scale factor for the transition probability matrix
+    use_negative_cosines: bool
+        Whether to use negative cosine similarity in the transition probability matrix
 
     Returns
     -------
@@ -400,9 +413,8 @@ def project_gauge_to_knn_graph(
         The transition probability matrix
     """
     # for each edge, compute the transition probability by the (normalized) cosine similarity between edge and the gauge
-
-    gauge_v1 = featuremap_kwds["vh_smoothed"][:,0,:]
-    gauge_v2 = featuremap_kwds["vh_smoothed"][:,1,:]
+    gauge_v1 = featuremap_kwds["VH"][:,0,:]
+    gauge_v2 = featuremap_kwds["VH"][:,1,:]
 
     head = graph.row
     tail = graph.col
@@ -416,20 +428,54 @@ def project_gauge_to_knn_graph(
         k = tail[i]
         # edge vector
         edge_vector = data[k] - data[j]
-        edge_vector = edge_vector
+        edge_vector = edge_vector.astype(np.float32)
 
         # gauge vector
-        gauge_vector_v1 = gauge_v1[j]
-        gauge_vector_v2 = gauge_v2[j]
+        gauge_vector_v1 = gauge_v1[j].astype(np.float32)
+        gauge_vector_v2 = gauge_v2[j].astype(np.float32)
 
-        # cosine similarity
+        # cosine sim
         T_v1[j,k] = np.dot(edge_vector, gauge_vector_v1) / (np.linalg.norm(edge_vector) * np.linalg.norm(gauge_vector_v1))
         T_v2[j,k] = np.dot(edge_vector, gauge_vector_v2) / (np.linalg.norm(edge_vector) * np.linalg.norm(gauge_vector_v2))
+    
+    # # cosine distance   
+    # T_v1 = 1 - T_v1
+    # T_v2 = 1 - T_v2
+    
+    # # clip the negative values in the transition probability matrix
+    # T_v1 = np.clip(T_v1, 0, None)
+    # T_v2 = np.clip(T_v2, 0, None)
+        
+    T_v1_pos = T_v1.copy()
+    T_v1_neg = T_v1.copy()
 
-    # Apply the softmax function to the transition probability matrix
-    T_v1 = np.expm1(T_v1)
-    T_v2 = np.expm1(T_v2)
-            
+    T_v2_pos = T_v2.copy()
+    T_v2_neg = T_v2.copy()
+
+    T_v1_pos = np.clip(T_v1_pos, 0, 1)
+    T_v1_neg= np.clip( T_v1_neg, -1, 0)
+
+    T_v2_pos = np.clip(T_v2_pos, 0, 1)
+    T_v2_neg = np.clip(T_v2_neg, -1, 0)
+
+    # T_v1.eliminate_zeros()
+    # T_v1_neg.eliminate_zeros()
+
+    # Apply the exponential transform to the transition probability matrix
+    T_v1 = np.expm1(T_v1_pos * scale) # equivalent to np.exp(graph.A * scale) - 1
+    T_v2 = np.expm1(T_v2_pos * scale)
+
+    
+    if use_negative_cosines:
+        T_v1 -= np.expm1(-T_v1_neg * scale)
+        T_v2 -= np.expm1(-T_v2_neg * scale)
+    else:
+        T_v1 += np.expm1(T_v1_neg * scale)
+        T_v1 += 1
+
+        T_v2 += np.expm1(T_v1_neg * scale)
+        T_v2 += 1
+
     # Normalize the transition probability matrix by knn neighbors
     T_v1 = T_v1 / np.sum(T_v1, axis=1)[:, np.newaxis]
     T_v2 = T_v2 / np.sum(T_v2, axis=1)[:, np.newaxis]
@@ -439,9 +485,6 @@ def project_gauge_to_knn_graph(
 
 
    
-
-
-# Recover the gauge in low dimensional from the low-dimensional embedding 
 def recover_gauge_from_embedding(
         data_embedding,
         featuremap_kwds,
@@ -462,35 +505,36 @@ def recover_gauge_from_embedding(
     gauge_v2_recover: array of shape (n_samples, n_components)
         The recovered gauge v2 in low dimensional space
     """
-
+    # Example input data
     knn_indices = featuremap_kwds["_knn_indices"]
+
     T_v1 = featuremap_kwds["T_v1"]
     T_v2 = featuremap_kwds["T_v2"]
 
-    # Modify the transition probability matrix by minus 1/n
-    T_v1 = T_v1 - 1/data_embedding.shape[0]
-    T_v2 = T_v2 - 1/data_embedding.shape[0]
+    # Modify the transition probability matrix by subtracting 1/n
+    n_samples = data_embedding.shape[0]
+    T_v1 = T_v1 - 1/n_samples
+    T_v2 = T_v2 - 1/n_samples
 
-    # Recover the gauge from the low-dimensional embedding by the expectation of displacement over the transition probability matrix
+    # Compute displacement using knn neighbors
+    displacement = data_embedding[knn_indices] - data_embedding[:, np.newaxis, :]  # shape (n_samples, k_neighbors, n_components)
 
-    displacement = data_embedding - data_embedding[:, np.newaxis, :] # shape (n_samples, n_samples, n_components)
+    # Select items from T_v1 and T_v2 rows using knn_indices
+    T_v1_knn = np.take_along_axis(T_v1, knn_indices, axis=1)  # shape (n_samples, k_neighbors)
+    T_v2_knn = np.take_along_axis(T_v2, knn_indices, axis=1)  # shape (n_samples, k_neighbors)
 
-    # T_v1[:, np.newaxis, :] with shape (n_samples, 1, n_samples)
-    gauge_v1_recover = np.matmul(T_v1[:, np.newaxis, :], displacement) # shape (n_samples, 1, n_components)
-    gauge_v2_recover = np.matmul(T_v2[:, np.newaxis, :], displacement)
-
-    gauge_v1_recover = np.squeeze(gauge_v1_recover, axis=1)
-    gauge_v2_recover = np.squeeze(gauge_v2_recover, axis=1)
+    # Compute the gauge recovery
+    gauge_v1_recover = np.einsum('ij,ijk->ik', T_v1_knn, displacement)  # shape (n_samples, n_components)
+    gauge_v2_recover = np.einsum('ij,ijk->ik', T_v2_knn, displacement)  # shape (n_samples, n_components)
 
     featuremap_kwds["gauge_v1_recover"] = gauge_v1_recover
     featuremap_kwds["gauge_v2_recover"] = gauge_v2_recover
 
+    # stack along the second axis
+    featuremap_kwds["VH_embedding"] = np.stack((gauge_v1_recover, gauge_v2_recover), axis=1)
 
 
- 
 
-
-        
 def tangent_space_embedding(
         featuremap_kwds,
         ):    
@@ -911,6 +955,10 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     if verbose:
         print(ts() + f' Tangent_space_approximation time is {T2-T1}')
     
+    if verbose:
+        print(ts() + " Project gauge to knn_graph")
+    # Project the gauge to KNN graph to compute the transition probability matrix
+    project_gauge_to_knn_graph(data, graph, featuremap_kwds=featuremap_kwds)
    
     '''
     Variation embedding only
@@ -925,14 +973,14 @@ def simplicial_set_embedding_with_tangent_space_embedding(
         return embedding
     else:    
 
-        # Embedding the gauge (rotation matrix) to low dim space
-        if verbose:
-            print(ts() + " Tangent space embedding")
-        T1 = time.time()
-        tangent_space_embedding(featuremap_kwds)
-        T2 = time.time()
-        if verbose:
-            print(ts() + f' Tangent_space_embedding time is {T2-T1}')
+        # # Embedding the gauge (rotation matrix) to low dim space
+        # if verbose:
+        #     print(ts() + " Tangent space embedding")
+        # T1 = time.time()
+        # tangent_space_embedding(featuremap_kwds)
+        # T2 = time.time()
+        # if verbose:
+        #     print(ts() + f' Tangent_space_embedding time is {T2-T1}')
 
 
         head = graph.row
@@ -1186,12 +1234,6 @@ class FeatureMAP(BaseEstimator):
         in greater repulsive force being applied, greater optimization
         cost, but slightly more accuracy.
 
-    transform_queue_size: float (optional, default 4.0)
-        For transform operations (embedding new points using a trained model_
-        this will control how aggressively to search for nearest neighbors.
-        Larger values will result in slower performance but more accurate
-        nearest neighbor evaluation.
-
     a: float (optional, default None)
         More specific parameters controlling the embedding. If None these
         values are set automatically as determined by ``min_dist`` and
@@ -1305,7 +1347,6 @@ class FeatureMAP(BaseEstimator):
         local_connectivity=1.0,
         repulsion_strength=1.0,
         negative_sample_rate=5,
-        transform_queue_size=4.0,
         a=None,
         b=None,
         random_state=None,
@@ -1347,7 +1388,6 @@ class FeatureMAP(BaseEstimator):
         self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
-        self.transform_queue_size = transform_queue_size
         self.transform_seed = transform_seed
         self.transform_mode = transform_mode
         self.force_approximation_algorithm = force_approximation_algorithm
@@ -2095,8 +2135,8 @@ from tqdm.auto import tqdm
 
 @numba.njit()
 def clip(val):
-    """Standard clamping of a value into a fixed range (in this case -4.0 to
-    4.0)
+    """Standard clamping of a value into a fixed range (in this case -2.0 to
+    2.0)
 
     Parameters
     ----------
@@ -2105,12 +2145,12 @@ def clip(val):
 
     Returns
     -------
-    The clamped value, now fixed to be in the range -4.0 to 4.0.
+    The clamped value, now fixed to be in the range -2.0 to 2.0.
     """
-    if val > 4.0:
-        return 4.0
-    elif val < -4.0:
-        return -4.0
+    if val > 2.0:
+        return 2.0
+    elif val < -2.0:
+        return -2.0
     else:
         return val
 
@@ -2334,7 +2374,7 @@ def _optimize_layout_euclidean_single_epoch_grad(
                     if grad_coeff_term > 0.0:
                         grad_d = clip(grad_coeff_term * vec_diff[d] * (-1.0))
                     else:
-                        grad_d = 4.0 
+                        grad_d = 2.0 
                     current[d] += grad_d * alpha
 
             epoch_of_next_negative_sample[i] += (
@@ -2557,7 +2597,10 @@ def optimize_layout_euclidean_anisotropic_projection(
     feat_lambda = featuremap_kwds["lambda"] 
     feat_R = featuremap_kwds["R"] # array shape of (n_vertices d)
     feat_VH = featuremap_kwds["VH"]
-    feat_VH_embedding = featuremap_kwds["VH_embedding"] # array of shape (n_vertices, dim)
+    # feat_VH_embedding = featuremap_kwds["VH_embedding"] # array of shape (n_vertices, dim)
+    feat_VH_embedding = np.repeat(np.eye(2)[np.newaxis, :, :], head_embedding.shape[0], axis=0) # initialize vh_embedding by identity matrix
+    feat_VH_embedding = feat_VH_embedding.astype(np.float32)
+
     # feat_rotation_angle = featuremap_kwds["rotation_angle"]
     feat_mu = featuremap_kwds["mu"] # edge probability
     feat_phi_sum = np.zeros(n_vertices, dtype=np.float32) # For each node i in embedding space, sum of edge existing probality incident to this node
@@ -2577,18 +2620,14 @@ def optimize_layout_euclidean_anisotropic_projection(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
     
-    # print('Test1')
-    import time
     for n in tqdm(range(n_epochs), **tqdm_kwds):
-        # print('Test2')
         featuremap_flag = (
             # featuremap and 
             (featuremap_kwds["lambda"] > 0)
             and (((n + 1) / float(n_epochs)) > (1 - featuremap_kwds["frac"]))
         )
-        # print(f'featuremap_flag_{featuremap_flag}')
+
         if featuremap_flag:
-            # FIXME: feat_init_fn might be referenced before assignment
             # Compute the initial embedding under rotation VH
             # T1 = time.time()
             feat_init_fn(
@@ -2621,7 +2660,12 @@ def optimize_layout_euclidean_anisotropic_projection(
             feat_re_mean = np.zeros(dim, dtype=np.float32)
             feat_re_cov = np.zeros(dim, dtype=np.float32)
 
-        # print('featuremap_flag' + str(featuremap_flag))
+        # recover the gauge from the low dimensional embedding
+        if featuremap_flag and n % 10 == 0:
+            # print('recover gauge from embedding')
+            recover_gauge_from_embedding(data_embedding=head_embedding, featuremap_kwds=featuremap_kwds)
+            feat_VH_embedding = featuremap_kwds["VH_embedding"].astype(np.float32)
+
         # T1 = time.time()
         optimize_fn(
             head_embedding,

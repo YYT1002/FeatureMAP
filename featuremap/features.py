@@ -282,14 +282,15 @@ def plot_gauge(
     # color = np.array(adata.obs['leiden']).astype(int)
     # plt.scatter(emb[:,0],emb[:,1], s=1, c=color, cmap='Set2', alpha=0.1)
     plt.scatter(emb[:,0],emb[:,1], s=1, alpha=0.1)
-    plt.title('Eigengene')
+    plt.title(f'{vkey}')
     plt.xticks([])
     plt.yticks([])
-    qv = plt.quiver(X_grid[:,0], X_grid[:,1],V_grid[:,0],V_grid[:,1],color='black',alpha=1,scale=3)
 
-    legend = plt.legend([qv], [vkey])
-    legend.set_bbox_to_anchor((1, 1))  # Set the shape of the legend
+    qv = plt.quiver(X_grid[:,0], X_grid[:,1],V_grid[:,0],V_grid[:,1],color='black',alpha=1,scale=3)
     plt.show()
+
+    # legend = plt.legend([qv], [vkey])
+    # legend.set_bbox_to_anchor((1, 1))  # Set the shape of the legend
     # plt.show()
     # plt.clf()
     
@@ -299,7 +300,8 @@ def plot_gauge(
 def plot_gauge_both(
         adata:AnnData,
         embedding='X_featmap',
-        # vkey='gauge_v1_emb',
+        vkey_1='gauge_v1_emb',
+        vkey_2='gauge_v2_emb',
         density=1,
         smooth=0.5,
         n_neighbors=None,
@@ -331,7 +333,7 @@ def plot_gauge_both(
     # Set grid as the support
     X_emb=adata.obsm[embedding]  # Exclude one leiden cluster;
     # X_emb=adata.obsm[embedding]
-    vkey='gauge_v1_emb'
+    vkey=vkey_1
     V_emb=adata.obsm[vkey] 
 
     # Normalize the V_emb
@@ -402,7 +404,7 @@ def plot_gauge_both(
 
 
     # X_emb=adata.obsm[embedding]
-    vkey='gauge_v2_emb'
+    vkey=vkey_2
     V_emb=adata.obsm[vkey] 
     # Normalize the V_emb
     V_emb = V_emb / np.linalg.norm(V_emb, axis=1)[:, np.newaxis]
