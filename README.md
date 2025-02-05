@@ -2,30 +2,38 @@
 
 # FeatureMAP: Feature-preserving Manifold Approximation and Projection
 
-Visualizing single-cell data is crucial for understanding cellular heterogeneity and dynamics. Traditional methods like UMAP and t-SNE are effective for clustering but often miss critical gene information. FeatureMAP innovatively combines UMAP and PCA concepts to preserve both clustering structures and gene feature variations within a low-dimensional space.
+Visualizing single-cell data is essential for understanding cellular heterogeneity and dynamics. **FeatureMAP** enhances this process by introducing **gene projection** and **transition/core states**, providing deeper insights into cellular states. While traditional methods like UMAP and t-SNE effectively capture clustering, they often overlook critical gene-level information. FeatureMAP addresses this limitation by integrating concepts from UMAP and PCA, preserving both clustering structures and gene feature variations within a low-dimensional space.
 
 ## Description
 
-FeatureMAP introduces a novel approach by enhancing manifold learning with pairwise tangent space embedding, aiming to retain crucial aspects of cellular data.
-We introduce two visualization plots by FeatureMAP: expression (GEX) and variation (GVA) embedding.
-Here is an example over one synthetic dataset ([BEELINE](https://github.com/Murali-group/Beeline)) with a bifurcation model. Compared with UMAP, FeatureMAP-GEX better preserves density, and FeatureMAP-GVA shows trajectories.
-![Bifurcation Embedding](./figures/bifurcation_embedding.png)
+FeatureMAP presents a novel approach by enhancing manifold learning with pairwise tangent space embedding, ensuring the retention of crucial cellular data features. It introduces two visualization plots: expression embedding (GEX) and variation embedding (GVA).
 
-Besides the two-dimensional visualization, FeatureMAP presents three core concepts:
+Here, we demonstrate its effectiveness using a synthetic dataset from ([BEELINE](https://github.com/Murali-group/Beeline)) based on a bifurcation model. Compared to UMAP, FeatureMAP-GEX better preserves cell density, while FeatureMAP-GVA clearly delineates developmental paths.
 
-1. **Gene Contribution**: Estimating and projecting gene feature loadings. The arrow represents the direction and magnitude of one gene's change. 
-    ![Gene Contribution](./figures/gene_contribution.png)
+<!-- ![Bifurcation Embedding](./figures/bifurcation_embedding.png) -->
 
-2. **Gene Variation Trajectory**: Tracking the cell differentiation across states. There are clear paths (transition states) connecting cell states (core states) in a knot-and-thread way.
-    ![Gene Variation Trajectory](./figures/gene_variation_trajectory.png)
-    [View 3D Plot](https://YYT1002.github.io/FeatureMAP/figures/3d_plot.html)
+   <img src="./figures/bifurcation_embedding.png" alt="Transition and Core States"/>
+
+
+
+Besides the two-dimensional visualization, FeatureMAP presents three key concepts:
+
+1. **Gene Projection**: Estimating and projecting gene feature loadings, where arrows indicate the direction and magnitude of gene expression changes.
+    ![Gene Projection](./figures/gene_contribution.png)
+
    
-3. **Core and Transition States**: Defined computationally through cell density and cell variation properties. Core states are cells with higher cell density and smaller cell variation, while transition states are lower cell density and larger cell variation.
-    ![Core and Transition States](./figures/core_trans_states.png)
+2. **Transition and Core States**: Transition and core states are computationally defined based on cell density, curvature, and betweenness centrality. Transition states are characterized by the lowest cell densities, maximal curvature, and highest betweenness centrality, whereas core states exhibit the highest cell densities, minimal curvature, and lowest betweenness centrality.
+    <!-- ![Core and Transition States](./figures/core_trans_states.png) -->
+
+    <img src="./figures/core_trans_states.png" alt="Transition and Core States" width="220" height="200"/>
+
+
+3. **Differential Gene Variation (DGV) Analysis**: The third concept introduces differential gene variation (**DGV**) analysis, which compares transition and core states to identify genes with significant variability. By quantifying gene variation between dynamic transition states and stable core states, DGV highlights regulatory genes likely driving cell-state transitions and differentiation.  
    
+    <img src="./figures/DGV.png" alt="DGV"/>
 
-These enhancements allow for differential gene variation (DGV) analysis, highlighting key regulatory genes that drive transitions between cellular states. Tested on both synthetic and real single-cell RNA sequencing (scRNA-seq) data, including studies on pancreatic development and T-cell exhaustion (Tutorials in ??), FeatureMAP provides a more detailed understanding of cellular trajectories and regulatory mechanisms.
 
+FeatureMAP, a feature-preserving method, enhances the visualization and interpretation of single-cell data. Through analyses of both synthetic and real scRNA-seq data ([TUTORIAL](https://featuremap.readthedocs.io/en/latest/index.html)), FeatureMAP effectively captures intricate clustering structures and identifies key regulatory genes, offering significant advantages for single-cell data analysis.
 
 ## Getting Started
 
@@ -37,27 +45,22 @@ These enhancements allow for differential gene variation (DGV) analysis, highlig
 
 ### Installation
 
-### 1. Install directly using pip:
+Install directly using pip:
 
 ```bash
 pip install featuremap-learn
 ```
 
-
 ## How to use FeatureMAP
 
 ### Data Visualization
-For data visualization, FeatureMAP introduces expression embedding and variation embedding. Here is one example by MNIST datasets.
+To apply FeatureMAP in Python with a data matrix (data), where rows represent cells and columns represent genes, use the following command:
 ```
+from sklearn.decomposition import PCA
 import featuremap
-from sklearn.datasets import fetch_openml
-from sklearn.utils import resample
 
-digits = fetch_openml(name='mnist_784')
-subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000, stratify=digits.target, random_state=1)
-
-x_emb = featuremap.featureMAP().fit_transform(subsample)
-v_emb = featuremap.featureMAP(output_variation=True).fit_transform(subsample)
+data_pca = PCA(n_components=50).fit_transform(data)
+data_emb = featuremap.FeatureMAP(output_variation=True).fit_transform(data_pca)
 
 ```
 
