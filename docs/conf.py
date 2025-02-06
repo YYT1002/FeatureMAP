@@ -54,10 +54,14 @@ intersphinx_disabled_domains = ['std']
 templates_path = ['_templates']
 
 # -- Options for HTML output
+import os
+docs_dir = os.path.abspath(os.path.dirname(__file__))
+
+project_root = os.path.abspath(os.path.join(docs_dir, '..'))
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
-html_extra_path = ['../figures']  # Add your images directory here
+html_extra_path = [os.path.join(project_root, 'figures')]
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
