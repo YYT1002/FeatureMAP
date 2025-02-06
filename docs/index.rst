@@ -2,7 +2,6 @@
    :parser: myst_parser.sphinx_
 
 .. toctree::
-   :hidden:
    :maxdepth: 1
    :caption: Tutorial:
    :glob:
@@ -10,7 +9,6 @@
    notebook/*.ipynb
  
 .. toctree::
-   :hidden:
    :maxdepth: 2
    :caption: API:
    :glob:
