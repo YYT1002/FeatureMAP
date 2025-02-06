@@ -55,13 +55,13 @@ templates_path = ['_templates']
 
 # -- Options for HTML output
 import os
-docs_dir = os.path.abspath(os.path.dirname(__file__))
+import sys
 
-project_root = os.path.abspath(os.path.join(docs_dir, '..'))
+# Add project root to the path
+sys.path.insert(0, os.path.abspath(".."))
 
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
-html_extra_path = [project_root]
+html_static_path = ['_static', '../figures']
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
