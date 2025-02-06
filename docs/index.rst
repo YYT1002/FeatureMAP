@@ -3,14 +3,19 @@
 
 .. toctree::
    :maxdepth: 1
+
+   README.rst
+
+.. toctree::
+   :maxdepth: 1
    :caption: Tutorial:
    :glob:
 
-   notebook/
+   notebook/*
  
 .. toctree::
    :maxdepth: 2
    :caption: API:
    :glob:
 
-   ../featuremap
+   ../featuremap/*
