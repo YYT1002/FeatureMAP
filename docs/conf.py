@@ -25,6 +25,11 @@ extensions = [
     "autoapi.extension"
 ]
 
+myst_enable_extensions = [
+    "html_image",   # Enable HTML images
+    "colon_fence"   # Enable ::: fences
+]
+
 autoapi_dirs = ['../featuremap']
 autoapi_ignore = ['*/tests/*']
 
@@ -51,6 +56,8 @@ templates_path = ['_templates']
 # -- Options for HTML output
 
 html_theme = 'sphinx_rtd_theme'
+html_static_path = ['_static']
+html_extra_path = ['figures']  # Add your images directory here
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
