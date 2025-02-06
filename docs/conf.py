@@ -61,7 +61,7 @@ project_root = os.path.abspath(os.path.join(docs_dir, '..'))
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
-html_extra_path = [os.path.join(project_root, 'figures')]
+html_extra_path = [project_root]
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
