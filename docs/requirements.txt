@@ -3,4 +3,5 @@ nbsphinx
 sphinx_autodoc_typehints
 sphinx_autodoc_defaultargs
 myst-parser
+astroid>=3
 sphinx-autoapi

@@ -12,6 +12,5 @@
    :maxdepth: 2
    :caption: API:
    :glob:
-   :exclude: tests, __init__.py
 
    featuremap/*.py
