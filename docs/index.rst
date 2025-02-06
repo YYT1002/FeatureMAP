@@ -1,22 +1,21 @@
-.. include:: README.rst
+.. include:: ../README.md
+   :parser: myst_parser.sphinx_
 
 .. toctree::
-   :hidden:   
    :maxdepth: 1
 
    README.rst
 
 .. toctree::
-   :hidden:
    :maxdepth: 1
    :caption: Tutorial:
+   :glob:
 
-   notebooks/test_github_pancreas.ipynb
-   notebooks/test_synthetic_data.ipynb
+   notebook/*
  
 .. toctree::
-   :hidden:
    :maxdepth: 2
    :caption: API:
+   :glob:
 
-   api/index
+   autoapi/index

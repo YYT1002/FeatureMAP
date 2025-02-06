@@ -25,6 +25,11 @@ extensions = [
     "autoapi.extension"
 ]
 
+myst_enable_extensions = [
+    "html_image",   # Enable HTML images
+    "colon_fence"   # Enable ::: fences
+]
+
 autoapi_dirs = ['../featuremap']
 autoapi_ignore = ['*/tests/*']
 
@@ -49,8 +54,17 @@ intersphinx_disabled_domains = ['std']
 templates_path = ['_templates']
 
 # -- Options for HTML output
+import os
+
 
 html_theme = 'sphinx_rtd_theme'
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+html_static_path = ['_static', os.path.join(BASE_DIR, 'figures'), '_images']
+html_extra_path = [os.path.join(BASE_DIR, 'figures')]
+
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+# In your conf.py
+exclude_patterns = ['tests', '__init__.py']  # Exclude directories or files
