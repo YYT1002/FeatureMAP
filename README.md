@@ -56,11 +56,10 @@ pip install featuremap-learn
 ### Data Visualization
 To apply FeatureMAP in Python with a data matrix (data), where rows represent cells and columns represent genes, use the following command:
 ```
-from sklearn.decomposition import PCA
 import featuremap
+data_emb_v = featuremap.FeatureMAP(output_variation=True).fit_transform(data_pca)
+data_emb = featuremap.FeatureMAP(output_variation=False).fit_transform(data_pca)
 
-data_pca = PCA(n_components=50).fit_transform(data)
-data_emb = featuremap.FeatureMAP(output_variation=True).fit_transform(data_pca)
 
 ```
 
