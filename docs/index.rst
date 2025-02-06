@@ -18,4 +18,4 @@
    :caption: API:
    :glob:
 
-   ../featuremap/*
+   autoapi/index
