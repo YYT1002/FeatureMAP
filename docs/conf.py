@@ -57,4 +57,3 @@ epub_show_urls = 'footnote'
 
 # In your conf.py
 exclude_patterns = ['tests', '__init__.py']  # Exclude directories or files
-source_suffix = ['.rst', '.ipynb']  # Or just '.ipynb' if you only use notebooks

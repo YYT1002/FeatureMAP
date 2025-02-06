@@ -13,4 +13,4 @@
    :caption: API:
    :glob:
 
-   featuremap/*.py
+   ../featuremap/*.py
