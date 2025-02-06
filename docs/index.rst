@@ -4,7 +4,7 @@
 .. toctree::
    :maxdepth: 1
 
-   README.rst
+   readme.rst
 
 .. toctree::
    :maxdepth: 1
