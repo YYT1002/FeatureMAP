@@ -2,13 +2,10 @@
    :parser: myst_parser.sphinx_
 
 .. toctree::
-   :hidden:   
-   :maxdepth: 1
-
-.. toctree::
    :hidden:
    :maxdepth: 1
    :caption: Tutorial:
+   :glob:
 
    notebook/*.ipynb
  
@@ -16,5 +13,7 @@
    :hidden:
    :maxdepth: 2
    :caption: API:
+   :glob:
+   :exclude: tests, __init__.py
 
-   api/index
+   featuremap/*.py
