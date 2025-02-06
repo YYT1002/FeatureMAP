@@ -6,11 +6,11 @@
    :caption: Tutorial:
    :glob:
 
-   notebook/*.ipynb
+   notebook/
  
 .. toctree::
    :maxdepth: 2
    :caption: API:
    :glob:
 
-   ../featuremap/*.py
+   ../featuremap
