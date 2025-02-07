@@ -48,7 +48,7 @@ FeatureMAP, a feature-preserving method, enhances the visualization and interpre
 Install directly using pip:
 
 ```bash
-pip install featuremap-learn
+pip install featuremap
 ```
 
 ## How to use FeatureMAP
