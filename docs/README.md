@@ -1,4 +1,4 @@
-![FeatureMAP Illustration](./docs/figures/featureMAP.png)
+![FeatureMAP Illustration](./figures/featureMAP.png)
 
 # FeatureMAP: Feature-preserving Manifold Approximation and Projection
 
@@ -10,27 +10,27 @@ FeatureMAP presents a novel approach by enhancing manifold learning with pairwis
 
 Here, we demonstrate its effectiveness using a synthetic dataset from ([BEELINE](https://github.com/Murali-group/Beeline)) based on a bifurcation model. Compared to UMAP, FeatureMAP-GEX better preserves cell density, while FeatureMAP-GVA clearly delineates developmental paths.
 
-<!-- ![Bifurcation Embedding](./docs/figures/bifurcation_embedding.png) -->
+<!-- ![Bifurcation Embedding](./figures/bifurcation_embedding.png) -->
 
-   <img src="./docs/figures/bifurcation_embedding.png" alt="Transition and Core States"/>
+   <img src="./figures/bifurcation_embedding.png" alt="Transition and Core States"/>
 
 
 
 Besides the two-dimensional visualization, FeatureMAP presents three key concepts:
 
 1. **Gene Projection**: Estimating and projecting gene feature loadings, where arrows indicate the direction and magnitude of gene expression changes.
-    ![Gene Projection](./docs/figures/gene_contribution.png)
+    ![Gene Projection](./figures/gene_contribution.png)
 
    
 2. **Transition and Core States**: Transition and core states are computationally defined based on cell density, curvature, and betweenness centrality. Transition states are characterized by the lowest cell densities, maximal curvature, and highest betweenness centrality, whereas core states exhibit the highest cell densities, minimal curvature, and lowest betweenness centrality.
-    <!-- ![Core and Transition States](./docs/figures/core_trans_states.png) -->
+    <!-- ![Core and Transition States](./figures/core_trans_states.png) -->
 
-    <img src="./docs/figures/core_trans_states.png" alt="Transition and Core States" width="220" height="200"/>
+    <img src="./figures/core_trans_states.png" alt="Transition and Core States" width="220" height="200"/>
 
 
 3. **Differential Gene Variation (DGV) Analysis**: The third concept introduces differential gene variation (**DGV**) analysis, which compares transition and core states to identify genes with significant variability. By quantifying gene variation between dynamic transition states and stable core states, DGV highlights regulatory genes likely driving cell-state transitions and differentiation.  
    
-    <img src="./docs/figures/DGV.png" alt="DGV"/>
+    <img src="./figures/DGV.png" alt="DGV"/>
 
 
 FeatureMAP, a feature-preserving method, enhances the visualization and interpretation of single-cell data. Through analyses of both synthetic and real scRNA-seq data ([TUTORIAL](https://featuremap.readthedocs.io/en/latest/index.html)), FeatureMAP effectively captures intricate clustering structures and identifies key regulatory genes, offering significant advantages for single-cell data analysis.
