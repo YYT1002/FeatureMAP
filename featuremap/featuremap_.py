@@ -200,7 +200,7 @@ def local_svd(
 
 
 import time
-def graph_convolution(features, knn_index, num_iterations=20, verbose=False):   
+def graph_convolution(features, knn_index, num_iterations, verbose=False):   
     """
     Perform iterative neighbor averaging as a simple graph convolution.
 
@@ -214,7 +214,7 @@ def graph_convolution(features, knn_index, num_iterations=20, verbose=False):
         dict: Dictionary storing the first averaged result under the key "VH".
     """
     if verbose:
-        print(f'Applying graph convolution for {num_iterations} iterations...')
+        print(ts() + f' Applying graph convolution for {num_iterations} iterations...')
     start_time = time.time()
 
     # Dictionary to store intermediate results
@@ -241,7 +241,7 @@ def graph_convolution(features, knn_index, num_iterations=20, verbose=False):
 
     end_time = time.time()
     if verbose:
-        print(f'Graph convolution completed in {end_time - start_time:.2f} seconds')
+        print(ts() + f' Graph convolution completed in {end_time - start_time:.2f} seconds')
 
     return features, featuremap_results
 
@@ -312,16 +312,18 @@ def tangent_space_approximation(
     knn_index = knn_index
     gauge_vh = np.array(gauge_vh)
 
-    if data.shape[0] < 5000:
-        num_iterations = int(np.log2(data.shape[0])/2)
-    elif data.shape[0] < 10000:
-        num_iterations = int(np.log2(data.shape[0])) 
-    else:
-        num_iterations = int(np.log2(data.shape[0])*1.5)
-    # num_iterations  = 42
+    num_iterations = featuremap_kwds["gcn_iterations"]
 
-    if featuremap_kwds['verbose']:
-        print(ts() + f' Average over {num_iterations} times')
+    if num_iterations is not None:
+        num_iterations = num_iterations
+    else:
+        if data.shape[0] < 5000:
+            num_iterations = int(np.log2(data.shape[0])/2)
+        elif data.shape[0] < 10000:
+            num_iterations = int(np.log2(data.shape[0])) 
+        else:
+            num_iterations = int(np.log2(data.shape[0])*2)
+        # num_iterations  = 42
 
     gauge_vh, featuremap_kwds["VH"] = graph_convolution(gauge_vh, knn_index, num_iterations=num_iterations, verbose=featuremap_kwds['verbose'])
 
@@ -1334,7 +1336,8 @@ class FeatureMAP(BaseEstimator):
         output_feat=False,
         disconnection_distance=None,
         output_variation=False,
-        threshold=0.9
+        threshold=0.9,
+        gcn_iterations=None
         # original_data_flag=True,
         # pca_vh=None
     ):
@@ -1374,6 +1377,7 @@ class FeatureMAP(BaseEstimator):
         
         self.output_variation = output_variation
         self.threshold = threshold
+        self.gcn_iterations = gcn_iterations
         # self.original_data_flag = original_data_flag,
         # self.pca_vh = pca_vh
         
@@ -1581,6 +1585,7 @@ class FeatureMAP(BaseEstimator):
             "verbose": self.verbose,
             "n_epochs": self.n_epochs,
             "threshold": self.threshold,   
+            'gcn_iterations': self.gcn_iterations,
             
         }
         # if self.output_variation:
