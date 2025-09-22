@@ -8,7 +8,7 @@
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorial on synthetic data:
+   :caption: Transition and core states detection on synthetic data:
    :glob:
 
    notebook/test_model_linear_1.ipynb
@@ -20,7 +20,7 @@
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorial on real data:
+   :caption: Real data visualization and transition/core state detection:
    :glob:
 
    notebook/test_cd8.ipynb
