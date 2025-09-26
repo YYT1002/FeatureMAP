@@ -4,5 +4,29 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "featuremap"
-authors = [{name = "Test", email = ""}]
-dynamic = ["version", "description"]
+version = "0.0.2"
+description = "Feature-preserving Manifold Approximation and Projection"
+readme = {file = "README.md", content-type = "text/markdown"}
+authors = [{name = "Yang Yang", email = "yangyangnwpu@gmail.com"}]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.13",
+    "scikit-learn>=0.16",
+    "scipy>=0.19",
+    "numba>=0.55.0",
+    "umap-learn>=0.5.1",
+]
+
+[project.optional-dependencies]
+features = [
+    "scanpy",
+    "pandas",
+    "anndata",
+    "matplotlib>=3.5.1",
+]
+core_transition_state = [
+    "scanpy",
+    "pandas",
+    "anndata",
+    "matplotlib>=3.5.1",
+]
