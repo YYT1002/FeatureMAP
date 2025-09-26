@@ -144,7 +144,7 @@ def kernel_density_estimate(data, X, bw=0.5, min_radius=5, output_onlylogp=False
 def local_svd(
         data,
         knn_index,
-        weight,
+        neighbor_weights,
         n_neighbors=15,
         n_neighbors_in_guage=30,
         ):
@@ -177,20 +177,24 @@ def local_svd(
     gauge_vh = []
     
     for row_i in numba.prange(data.shape[0]):
-        if n_neighbors_in_guage < n_neighbors:
-            indices = knn_index[row_i, 1:n_neighbors_in_guage+1].astype(np.int64)
-        else:
-            row_weight = weight[row_i]
-            indices = np.argsort(-row_weight)[1:n_neighbors_in_guage+1].astype(np.int64)
+        # choose up to n_neighbors_in_guage nearest neighbors, skipping self at 0
+        upper = n_neighbors_in_guage + 1
+        if upper > n_neighbors:
+            upper = n_neighbors
+        indices = knn_index[row_i, 1:upper]
 
         data_around_i = data[indices] - data[row_i]
-        
-        weights_around_i = weight[row_i, indices]
-        weight_diag = np.diag(weights_around_i / np.sum(weights_around_i))
-        weight_sqrt = np.sqrt(weight_diag)
-        
-        u, s, vh = np.linalg.svd(np.dot(weight_sqrt, data_around_i), full_matrices=False)
-        
+
+        weights_around_i = neighbor_weights[row_i, 1:upper]
+        # Normalize and apply as row-wise scaling without forming diagonal matrices
+        wsum = np.sum(weights_around_i)
+        if wsum == 0.0:
+            wsum = 1.0
+        sqrt_w = np.sqrt(weights_around_i / wsum)
+        weighted = data_around_i * sqrt_w[:, np.newaxis]
+
+        u, s, vh = np.linalg.svd(weighted, full_matrices=False)
+
         gauge_u.append(u)
         singular_values.append(s)
         gauge_vh.append(vh)
@@ -200,7 +204,7 @@ def local_svd(
 
 
 import time
-def graph_convolution(features, knn_index, num_iterations, verbose=False):   
+def graph_convolution(features, knn_index, num_iterations, verbose=False, memory_target_mb=256, backend="auto"):   
     """
     Perform iterative neighbor averaging as a simple graph convolution.
 
@@ -221,23 +225,73 @@ def graph_convolution(features, knn_index, num_iterations, verbose=False):
     featuremap_results = {}
 
     # Iterative neighbor averaging
-    for iteration in range(num_iterations):
-        smoothed_features = np.zeros_like(features)
+    n_nodes, f_dim, c_dim = features.shape
+    k = knn_index.shape[1]
+    eps = 1e-12
 
-        for i in range(features.shape[0]):
-            # Compute the mean over nearest neighbors
-            neighbor_features = features[knn_index[i], :, :]
-            smoothed_features[i] = np.mean(neighbor_features, axis=0)
+    use_sparse = False
+    if backend == "sparse":
+        use_sparse = True
+    elif backend == "auto":
+        # Prefer sparse backend for very large n, or if temporary gather would exceed target memory
+        # Estimate gather tensor size per batch for batch approach
+        target_bytes = max(1, int(memory_target_mb * 1024 * 1024))
+        denom = max(1, 4 * k * f_dim * c_dim)
+        est_batch = int(target_bytes // denom)
+        if n_nodes >= 50_000 or est_batch < 32:
+            use_sparse = True
 
-            # Normalize the mean feature vectors
-            smoothed_features[i] /= np.linalg.norm(smoothed_features[i], axis=1, keepdims=True)
+    if use_sparse:
+        # Build a row-stochastic adjacency once, then apply repeated sparse matmuls
+        # Filter invalid neighbors (-1)
+        idx = knn_index.reshape(-1)
+        rows = np.repeat(np.arange(n_nodes, dtype=np.int32), k)
+        mask = idx >= 0
+        rows = rows[mask]
+        cols = idx[mask].astype(np.int32, copy=False)
+        # Row-normalized weights (mean over neighbors)
+        data = np.full(rows.shape[0], 1.0 / float(k), dtype=np.float32)
+        # Build CSR adjacency
+        adj = scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes))
 
-        # Update features for the next iteration
-        features = smoothed_features
+        for iteration in range(num_iterations):
+            # Flatten features to (n_nodes, f_dim * c_dim)
+            flat = features.reshape(n_nodes, f_dim * c_dim)
+            flat = adj.dot(flat)
+            smoothed = flat.reshape(n_nodes, f_dim, c_dim)
+            # Normalize across channel dimension per feature row
+            norms = np.linalg.norm(smoothed, axis=2, keepdims=True)
+            norms = np.maximum(norms, eps)
+            features = smoothed / norms
+            if iteration == 0:
+                featuremap_results["VH"] = features.astype(np.float32, copy=True)
+    else:
+        # Vectorized with batching and advanced indexing
+        target_bytes = max(1, int(memory_target_mb * 1024 * 1024))
+        denom = max(1, 4 * k * f_dim * c_dim)
+        batch_size = int(target_bytes // denom)
+        if batch_size < 32:
+            batch_size = 32
+        batch_size = min(batch_size, n_nodes)
 
-        # Store the first iteration result
-        if iteration == 0:
-            featuremap_results["VH"] = features.astype(np.float32, copy=True)
+        for iteration in range(num_iterations):
+            smoothed_features = np.empty_like(features)
+
+            for start in range(0, n_nodes, batch_size):
+                end = min(n_nodes, start + batch_size)
+                idx_batch = knn_index[start:end]  # (B, k)
+                # Gather neighbor features: (B, k, f_dim, c_dim)
+                neighbor_features = features[idx_batch]
+                # Mean over neighbors -> (B, f_dim, c_dim)
+                mean_features = neighbor_features.mean(axis=1)
+                # Normalize across channel dimension per feature row
+                norms = np.linalg.norm(mean_features, axis=2, keepdims=True)
+                norms = np.maximum(norms, eps)
+                smoothed_features[start:end] = mean_features / norms
+
+            features = smoothed_features
+            if iteration == 0:
+                featuremap_results["VH"] = features.astype(np.float32, copy=True)
 
     end_time = time.time()
     if verbose:
@@ -272,32 +326,50 @@ def tangent_space_approximation(
     Local tangent space U, S, V
     """
     
+    import os
     # check if the data is sparse
     if scipy.sparse.issparse(data):
         data = data.toarray()
-    
-    
-    weight = graph.toarray()
 
     n_neighbors = featuremap_kwds["n_neighbors"]
     n_neighbors_in_guage = int(featuremap_kwds["gauge_coefficient"] * n_neighbors)
-    knn_index = featuremap_kwds["_knn_indices"]
-    
+    knn_index = featuremap_kwds["_knn_indices"].astype(np.int32)
+    # clamp gauge neighbor count to available knn to avoid extra memory
+    if n_neighbors_in_guage >= n_neighbors:
+        n_neighbors_in_guage = n_neighbors - 1 if n_neighbors > 1 else 0
+
+    # Build neighbor weights for each row from sparse graph without densifying
+    # neighbor_weights has shape (n_samples, n_neighbors); positions without edges are 0
+    n_samples = knn_index.shape[0]
+    neighbor_weights = np.zeros((n_samples, n_neighbors), dtype=np.float32)
+    G = graph.tocsr()
+    for i in range(n_samples):
+        inds = knn_index[i]
+        # mask invalid indices (-1)
+        for j in range(n_neighbors):
+            nb = inds[j]
+            if nb >= 0:
+                # fetch scalar weight; G[i, nb] returns 1x1 sparse, use .A1 or .toarray()
+                val = G[i, nb]
+                # scipy sparse scalar -> np.matrix subclass or 0; convert
+                w = float(val) if hasattr(val, "__float__") else float(val.toarray()[0, 0])
+                neighbor_weights[i, j] = w
+
     gauge_u = [] # list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
     singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
     gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
     
     T1 = time.time()
-    gauge_u,singular_values, gauge_vh = local_svd(
+    gauge_u, singular_values, gauge_vh = local_svd(
             data,
             knn_index,
-            weight,
+            neighbor_weights,
             n_neighbors,
             n_neighbors_in_guage,
             )
     
-    featuremap_kwds["U"] = np.array(gauge_u).astype(np.float32, copy=True) # For visualization of local 
-    featuremap_kwds["Singular_value"] = np.array(singular_values).astype(np.float32, copy=True) # For visualization of local 
+    # Avoid storing U to reduce RAM; keep singular values and VH only
+    featuremap_kwds["Singular_value"] = np.array(singular_values).astype(np.float32, copy=True)
     featuremap_kwds["VH"] = np.array(gauge_vh).astype(np.float32, copy=True)
     T2 = time.time()
     if featuremap_kwds['verbose']:
@@ -372,66 +444,60 @@ def project_gauge_to_knn_graph(
     head = graph.row
     tail = graph.col
 
-    # Probability transition matrix for gauge v1 and v2
-    T_v1 = np.zeros((data.shape[0], data.shape[0]))
-    T_v2 = np.zeros((data.shape[0], data.shape[0]))
+    # Build sparse transition scores only on existing edges
+    rows = []
+    cols = []
+    data_v1 = []
+    data_v2 = []
 
     for i in range(len(head)):
-        j = head[i]
-        k = tail[i]
-        # edge vector
-        edge_vector = data[k] - data[j]
-        edge_vector = edge_vector.astype(np.float32)
+        j = int(head[i])
+        k = int(tail[i])
+        edge_vector = (data[k] - data[j]).astype(np.float32, copy=False)
+        gv1 = gauge_v1[j].astype(np.float32, copy=False)
+        gv2 = gauge_v2[j].astype(np.float32, copy=False)
+        denom1 = (np.linalg.norm(edge_vector) * np.linalg.norm(gv1))
+        denom2 = (np.linalg.norm(edge_vector) * np.linalg.norm(gv2))
+        c1 = 0.0 if denom1 == 0.0 else float(np.dot(edge_vector, gv1) / denom1)
+        c2 = 0.0 if denom2 == 0.0 else float(np.dot(edge_vector, gv2) / denom2)
+        rows.append(j)
+        cols.append(k)
+        data_v1.append(c1)
+        data_v2.append(c2)
 
-        # gauge vector
-        gauge_vector_v1 = gauge_v1[j].astype(np.float32)
-        gauge_vector_v2 = gauge_v2[j].astype(np.float32)
+    rows = np.asarray(rows, dtype=np.int32)
+    cols = np.asarray(cols, dtype=np.int32)
+    v1 = np.asarray(data_v1, dtype=np.float32)
+    v2 = np.asarray(data_v2, dtype=np.float32)
 
-        # cosine sim
-        T_v1[j,k] = np.dot(edge_vector, gauge_vector_v1) / (np.linalg.norm(edge_vector) * np.linalg.norm(gauge_vector_v1))
-        T_v2[j,k] = np.dot(edge_vector, gauge_vector_v2) / (np.linalg.norm(edge_vector) * np.linalg.norm(gauge_vector_v2))
-    
-    # # cosine distance   
-    # T_v1 = 1 - T_v1
-    # T_v2 = 1 - T_v2
-    
-    # # clip the negative values in the transition probability matrix
-    # T_v1 = np.clip(T_v1, 0, None)
-    # T_v2 = np.clip(T_v2, 0, None)
-        
-    T_v1_pos = T_v1.copy()
-    T_v1_neg = T_v1.copy()
+    # Split pos/neg and apply expm1 transform sparsely
+    v1_pos = np.clip(v1, 0.0, 1.0)
+    v1_neg = np.clip(v1, -1.0, 0.0)
+    v2_pos = np.clip(v2, 0.0, 1.0)
+    v2_neg = np.clip(v2, -1.0, 0.0)
 
-    T_v2_pos = T_v2.copy()
-    T_v2_neg = T_v2.copy()
-
-    T_v1_pos = np.clip(T_v1_pos, 0, 1)
-    T_v1_neg= np.clip( T_v1_neg, -1, 0)
-
-    T_v2_pos = np.clip(T_v2_pos, 0, 1)
-    T_v2_neg = np.clip(T_v2_neg, -1, 0)
-
-    # T_v1.eliminate_zeros()
-    # T_v1_neg.eliminate_zeros()
-
-    # Apply the exponential transform to the transition probability matrix
-    T_v1 = np.expm1(T_v1_pos * scale) # equivalent to np.exp(graph.A * scale) - 1
-    T_v2 = np.expm1(T_v2_pos * scale)
-
-    
+    tv1 = np.expm1(v1_pos * scale)
+    tv2 = np.expm1(v2_pos * scale)
     if use_negative_cosines:
-        T_v1 -= np.expm1(-T_v1_neg * scale)
-        T_v2 -= np.expm1(-T_v2_neg * scale)
+        tv1 -= np.expm1(-v1_neg * scale)
+        tv2 -= np.expm1(-v2_neg * scale)
     else:
-        T_v1 += np.expm1(T_v1_neg * scale)
-        T_v1 += 1
+        tv1 += np.expm1(v1_neg * scale) + 1.0
+        tv2 += np.expm1(v2_neg * scale) + 1.0
 
-        T_v2 += np.expm1(T_v1_neg * scale)
-        T_v2 += 1
+    n = data.shape[0]
+    T_v1 = scipy.sparse.csr_matrix((tv1, (rows, cols)), shape=(n, n))
+    T_v2 = scipy.sparse.csr_matrix((tv2, (rows, cols)), shape=(n, n))
 
-    # Normalize the transition probability matrix by knn neighbors
-    T_v1 = T_v1 / np.sum(T_v1, axis=1)[:, np.newaxis]
-    T_v2 = T_v2 / np.sum(T_v2, axis=1)[:, np.newaxis]
+    # Row-normalize (avoid densifying)
+    row_sums_v1 = np.asarray(T_v1.sum(axis=1)).ravel()
+    row_sums_v1[row_sums_v1 == 0.0] = 1.0
+    row_sums_v2 = np.asarray(T_v2.sum(axis=1)).ravel()
+    row_sums_v2[row_sums_v2 == 0.0] = 1.0
+    inv_v1 = scipy.sparse.diags(1.0 / row_sums_v1)
+    inv_v2 = scipy.sparse.diags(1.0 / row_sums_v2)
+    T_v1 = inv_v1.dot(T_v1)
+    T_v2 = inv_v2.dot(T_v2)
 
     featuremap_kwds["T_v1"] = T_v1
     featuremap_kwds["T_v2"] = T_v2
@@ -465,22 +531,44 @@ def recover_gauge_from_embedding(
     T_v1 = featuremap_kwds["T_v1"]
     T_v2 = featuremap_kwds["T_v2"]
 
-    # Modify the transition probability matrix by subtracting 1/n
+    # Gather per-row transition weights for knn neighbors without densifying whole matrices
     n_samples = data_embedding.shape[0]
-    T_v1 = T_v1 - 1/n_neighbors
-    T_v2 = T_v2 - 1/n_neighbors
+    k = knn_indices.shape[1]
+    T_v1_knn = np.zeros((n_samples, k), dtype=np.float32)
+    T_v2_knn = np.zeros((n_samples, k), dtype=np.float32)
+    if scipy.sparse.issparse(T_v1):
+        T1 = T_v1.tocsr()
+        T2 = T_v2.tocsr()
+        for i in range(n_samples):
+            idx = knn_indices[i]
+            for j in range(k):
+                nb = idx[j]
+                if nb >= 0:
+                    T_v1_knn[i, j] = T1[i, nb]
+                    T_v2_knn[i, j] = T2[i, nb]
+    else:
+        # dense
+        T_v1_knn = np.take_along_axis(T_v1, knn_indices, axis=1)
+        T_v2_knn = np.take_along_axis(T_v2, knn_indices, axis=1)
+    
+    # Modify the transition weights by subtracting 1/n_neighbors
+    T_v1_knn = T_v1_knn - (1.0 / n_neighbors)
+    T_v2_knn = T_v2_knn - (1.0 / n_neighbors)
 
     # Compute displacement using knn neighbors
-    displacement = data_embedding[knn_indices] - data_embedding[:, np.newaxis, :]  # shape (n_samples, k_neighbors, n_components)
+    # avoid negative indices by masking
+    valid_mask = knn_indices >= 0
+    safe_knn = knn_indices.copy()
+    safe_knn[~valid_mask] = 0
+    displacement = data_embedding[safe_knn] - data_embedding[:, np.newaxis, :]  # shape (n_samples, k_neighbors, n_components)
     displacement_v1 = displacement
     # rotate the displacement by pi/2 
     displacement_v2 = np.array([displacement[:,:,1], -displacement[:,:,0]]).transpose(1,2,0)
 
-    # Select items from T_v1 and T_v2 rows using knn_indices
-    T_v1_knn = np.take_along_axis(T_v1, knn_indices, axis=1)  # shape (n_samples, k_neighbors)
-    T_v2_knn = np.take_along_axis(T_v2, knn_indices, axis=1)  # shape (n_samples, k_neighbors)
-
     # Compute the gauge recovery
+    # zero out contributions from invalid neighbors
+    T_v1_knn = T_v1_knn * valid_mask.astype(np.float32)
+    T_v2_knn = T_v2_knn * valid_mask.astype(np.float32)
     gauge_v1_emb = np.einsum('ij,ijk->ik', T_v1_knn, displacement_v1)  # shape (n_samples, n_components)
     gauge_v2_emb = np.einsum('ij,ijk->ik', T_v2_knn, displacement_v2)  # shape (n_samples, n_components)
 
@@ -514,13 +602,13 @@ def tangent_space_embedding(
     min_dist = featuremap_kwds["min_dist"]
     n_epochs = featuremap_kwds["n_epochs"]
 
-    gauge_vh = featuremap_kwds["vh_smoothed"].copy()
+    gauge_vh = featuremap_kwds["vh_smoothed"]
+    gauge_vh_copy = np.array(gauge_vh, copy=True)
 
 
     # First largest PC
     # T1 = time.time()
-    gauge_vh_copy = gauge_vh.copy()
-    rotation_matrix = np.array(gauge_vh_copy)[:,0,:]
+    rotation_matrix = gauge_vh_copy[:,0,:]
     
     # from sklearn.decomposition import TruncatedSVD
     from sklearn.decomposition import PCA
@@ -535,16 +623,18 @@ def tangent_space_embedding(
     # T2 = time.time()
     # print(f'UMAP time is {T2-T1}')
     
-    umap_embedding_norm = np.linalg.norm(umap_embedding, axis=1)
-        
+    umap_embedding_norm = np.linalg.norm(umap_embedding, axis=1, keepdims=True)
+    umap_embedding_norm[umap_embedding_norm == 0.0] = 1.0
+
     # gauge_vh_embedding is embedding of VH
-    gauge_vh_mean_embedding = np.zeros([umap_embedding.shape[0], umap_embedding.shape[1],2])
-    gauge_vh_mean_embedding[:,0,0] = umap_embedding[:, 0]/umap_embedding_norm
-    gauge_vh_mean_embedding[:,0,1] = umap_embedding[:, 1]/umap_embedding_norm
+    gauge_vh_mean_embedding = np.zeros([umap_embedding.shape[0], umap_embedding.shape[1], 2])
+    normalized_embedding = umap_embedding / umap_embedding_norm
+    gauge_vh_mean_embedding[:, 0, 0] = normalized_embedding[:, 0]
+    gauge_vh_mean_embedding[:, 0, 1] = normalized_embedding[:, 1]
     
     
     # Second largest PC
-    rotation_matrix = np.array(gauge_vh_copy)[:,1,:]
+    rotation_matrix = gauge_vh_copy[:,1,:]
     pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
     X_pca = pca.fit_transform(rotation_matrix)
     
@@ -553,11 +643,14 @@ def tangent_space_embedding(
     # umap_embedding = umap.UMAP(n_neighbors=30,  metric='euclidean',min_dist=0.5).fit_transform(X=X_pca)
     featuremap_kwds['gauge_v2_emb'] = umap_embedding
     
-    umap_embedding_norm = np.linalg.norm(umap_embedding, axis=1)
-        
+    umap_embedding_norm = np.linalg.norm(umap_embedding, axis=1, keepdims=True)
+    umap_embedding_norm[umap_embedding_norm == 0.0] = 1.0
+
+    normalized_embedding = umap_embedding / umap_embedding_norm
+
     # gauge_vh_embedding is embedding of VH
-    gauge_vh_mean_embedding[:,1,0] = umap_embedding[:, 0]/umap_embedding_norm
-    gauge_vh_mean_embedding[:,1,1] = umap_embedding[:, 1]/umap_embedding_norm
+    gauge_vh_mean_embedding[:, 1, 0] = normalized_embedding[:, 0]
+    gauge_vh_mean_embedding[:, 1, 1] = normalized_embedding[:, 1]
 
     featuremap_kwds["VH_embedding"] = np.array(gauge_vh_mean_embedding).astype(np.float32, copy=True) # VH_embedding after average
   
@@ -666,18 +759,23 @@ def variation_embedding(
     ##########################################
     # Compute feature variation
     ############################################
-    gauge_vh = featuremap_kwds["vh_smoothed"].copy()
-  
-    singular_values_collection = featuremap_kwds["Singular_value"].copy()
+    gauge_vh = featuremap_kwds["vh_smoothed"]
+    singular_values_collection = featuremap_kwds["Singular_value"]
     
     # Compute intrinsic dimensionality locally
     def pc_accumulation(arr, threshold):
-        arr_sum = np.sum(np.square(arr))
-        temp_sum = 0
+        arr_sum = float(np.sum(np.square(arr)))
+        if arr_sum <= 0.0:
+            return 0
+
+        temp_sum = 0.0
         for i in range(arr.shape[0]):
             temp_sum += arr[i] * arr[i]
             if temp_sum > arr_sum * threshold:
                 return i
+
+        # If the threshold is never exceeded (e.g., threshold >= 1), fall back to the last index
+        return max(arr.shape[0] - 1, 0)
     
     # threshold = 0.5
     intrinsic_dim = np.zeros(data.shape[0]).astype(int)
@@ -709,10 +807,16 @@ def variation_embedding(
     featuremap_kwds['gauge_v2_emb'][:,0] = -featuremap_kwds['gauge_v2_emb'][:,0]
 
     # normalze the gauge_v1_emb and gauge_v2_emb
-    gauge_v1_emb_norm = np.linalg.norm(featuremap_kwds['gauge_v1_emb'], axis=1)
-    gauge_v2_emb_norm = np.linalg.norm(featuremap_kwds['gauge_v2_emb'], axis=1)
+    gauge_v1_emb_norm = np.linalg.norm(featuremap_kwds['gauge_v1_emb'], axis=1, keepdims=True)
+    gauge_v2_emb_norm = np.linalg.norm(featuremap_kwds['gauge_v2_emb'], axis=1, keepdims=True)
 
-    featuremap_kwds['VH_embedding'] = np.stack((featuremap_kwds['gauge_v1_emb']/gauge_v1_emb_norm[:,np.newaxis], featuremap_kwds['gauge_v2_emb']/gauge_v2_emb_norm[:, np.newaxis]), axis=1)
+    gauge_v1_emb_norm[gauge_v1_emb_norm == 0.0] = 1.0
+    gauge_v2_emb_norm[gauge_v2_emb_norm == 0.0] = 1.0
+
+    featuremap_kwds['VH_embedding'] = np.stack((
+        featuremap_kwds['gauge_v1_emb'] / gauge_v1_emb_norm,
+        featuremap_kwds['gauge_v2_emb'] / gauge_v2_emb_norm
+    ), axis=1)
 
     return emb_variation.embedding_
 
@@ -975,16 +1079,23 @@ def simplicial_set_embedding_with_tangent_space_embedding(
         ro = np.log(epsilon + ro_var) # radius in each directions of the hyper-ellipsoid
         # print('ro, ' + str(ro))
         
-        R = (ro - np.mean(ro, axis=0)) / np.std(ro, axis=0) # normalization by column
+        std_ro = np.std(ro, axis=0)
+        std_ro = np.where(std_ro == 0.0, 1.0, std_ro)
+        R = (ro - np.mean(ro, axis=0)) / std_ro # normalization by column
         featuremap_kwds["R"] = R.astype(np.float32, copy=True)
         featuremap_kwds["mu"] = graph.data
         featuremap_kwds["mu_sum"] = mu_sum
 
 
+        min_embed = np.min(embedding, 0)
+        max_embed = np.max(embedding, 0)
+        range_embed = max_embed - min_embed
+        range_embed[range_embed == 0.0] = 1.0
+
         embedding = (
             10.0
-            * (embedding - np.min(embedding, 0))
-            / (np.max(embedding, 0) - np.min(embedding, 0))
+            * (embedding - min_embed)
+            / range_embed
         ).astype(np.float32, order="C")
         
         if verbose:
@@ -1131,7 +1242,7 @@ class FeatureMAP(BaseEstimator):
 
     Parameters
     ----------
-    n_neighbors: float (optional, default 30)
+    n_neighbors: float (optional, default 15)
         The size of local neighborhood (in terms of number of neighboring
         sample points) used for manifold approximation. Larger values
         result in more global views of the manifold, while smaller
@@ -1268,7 +1379,7 @@ class FeatureMAP(BaseEstimator):
         (1 - feat_frac) fraction of epochs optimize the original UMAP objective
         before introducing the anisotropic density correlation term.
 
-    feat_gauge_coefficient: float (default 2.0)
+    feat_gauge_coefficient: float (default 1.0)
         A coefficient multiplication of n_neighbors as number of neighbors in 
         gauge construction. Larger coefficient means long distance information
     
@@ -1301,7 +1412,7 @@ class FeatureMAP(BaseEstimator):
 
     def __init__(
         self,
-        n_neighbors=30,
+        n_neighbors=15,
         n_components=2,
         metric="euclidean",
         metric_kwds=None,
@@ -1331,7 +1442,7 @@ class FeatureMAP(BaseEstimator):
         # featuremap=False,
         feat_lambda=0.5,
         feat_frac=0.3,
-        feat_gauge_coefficient = 2.0,
+        feat_gauge_coefficient = 1.0,
         feat_var_shift=0.1,
         output_feat=False,
         disconnection_distance=None,
@@ -1577,6 +1688,7 @@ class FeatureMAP(BaseEstimator):
             "gauge_coefficient": self.feat_gauge_coefficient, #if self.featuremap else 0.0,
             "var_shift": self.feat_var_shift,
             "n_neighbors": self.n_neighbors,
+            "n_jobs": self.n_jobs,
             "random_state": self.random_state,
             "metric": self.metric,
             "min_dist": self.min_dist,
@@ -2683,4 +2795,3 @@ def optimize_layout_euclidean_anisotropic_projection(
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
         
     return head_embedding
-

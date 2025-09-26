@@ -559,6 +559,7 @@ def plot_gauge_both(
 def local_intrinsic_dim(
         adata: AnnData,
         threshold=0.9,
+        plot: bool = False,
 ):
     """
     Compute the intrinsic dimensionality locally based on local SVD.
@@ -569,6 +570,8 @@ def local_intrinsic_dim(
         An annotated data matrix.
     threshold : float
         Threshold for proportion of variance contributions. The default is 0.9.
+    plot : bool
+        If True, plot a histogram of the intrinsic dimensionality. Default False.
     
     Returns
     -------
@@ -590,10 +593,13 @@ def local_intrinsic_dim(
     
     for i in range(adata.shape[0]):            
         intrinsic_dim[i] = pc_accumulation(singular_values_collection[i], threshold)
-    # plt.hist(intrinsic_dim)
-    # plt.title('Local_intrinsic_dim')
-    # plt.show()
-    # plt.clf()
+    if plot:
+        plt.hist(intrinsic_dim, bins=30)
+        plt.title('Local_intrinsic_dim')
+        plt.xlabel('Intrinsic dimensionality')
+        plt.ylabel('Count')
+        plt.show()
+        plt.clf()
     
     adata.obs['intrinsic_dim'] = intrinsic_dim
     return intrinsic_dim
@@ -2569,5 +2575,4 @@ def featuremap_var_3d(emb_var_3d, color=None, symbol=None, marker_size=3):
     fig_3d.update_traces(marker_size=marker_size) # Modify the point size
     fig_3d.update_layout(autosize=False, width=500,height=500,)
     fig_3d.show()
-
 
