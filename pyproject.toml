@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "featuremap"
-version = "0.0.2"
+version = "0.0.3"
 description = "Feature-preserving Manifold Approximation and Projection"
 readme = {file = "README.md", content-type = "text/markdown"}
 authors = [{name = "Yang Yang", email = "yangyangnwpu@gmail.com"}]
