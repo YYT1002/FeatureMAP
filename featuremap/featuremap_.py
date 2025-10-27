@@ -191,7 +191,8 @@ def local_svd(
         if wsum == 0.0:
             wsum = 1.0
         sqrt_w = np.sqrt(weights_around_i / wsum)
-        weighted = data_around_i * sqrt_w[:, np.newaxis]
+        sqrt_w_col = sqrt_w.reshape((sqrt_w.shape[0], 1))
+        weighted = data_around_i * sqrt_w_col
 
         u, s, vh = np.linalg.svd(weighted, full_matrices=False)
 
@@ -784,7 +785,7 @@ def variation_embedding(
     # Compute the gene norm in top k PCs (norm of the arrow in biplot)
     k = int(np.median(intrinsic_dim))
     if featuremap_kwds['verbose']:
-        print(f'k is {k}')
+        print(ts() + f' The intrinsic dimension median is {k}')
     
     # gene_var_norm = np.linalg.norm(gauge_vh[:, :k, :], axis=1)
     gene_var_norm = np.sqrt(np.einsum('ijk, ijk->ik', gauge_vh[:, :k, :], gauge_vh[:, :k, :]))
@@ -2689,8 +2690,8 @@ def optimize_layout_euclidean_anisotropic_projection(
     feat_lambda = featuremap_kwds["lambda"] 
     feat_R = featuremap_kwds["R"] # array shape of (n_vertices d)
     feat_VH = featuremap_kwds["VH"]
-    # feat_VH_embedding = featuremap_kwds["VH_embedding"] # array of shape (n_vertices, dim)
-    feat_VH_embedding = np.repeat(np.eye(2)[np.newaxis, :, :], head_embedding.shape[0], axis=0) # initialize vh_embedding by identity matrix
+    feat_VH_embedding = featuremap_kwds["VH_embedding"] # array of shape (n_vertices, dim)
+    # feat_VH_embedding = np.repeat(np.eye(2)[np.newaxis, :, :], head_embedding.shape[0], axis=0) # initialize vh_embedding by identity matrix
     feat_VH_embedding = feat_VH_embedding.astype(np.float32)
 
     # feat_rotation_angle = featuremap_kwds["rotation_angle"]
