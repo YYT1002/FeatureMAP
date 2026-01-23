@@ -336,8 +336,8 @@ def tangent_space_approximation(
     n_neighbors_in_guage = int(featuremap_kwds["gauge_coefficient"] * n_neighbors)
     knn_index = featuremap_kwds["_knn_indices"].astype(np.int32)
     # clamp gauge neighbor count to available knn to avoid extra memory
-    if n_neighbors_in_guage >= n_neighbors:
-        n_neighbors_in_guage = n_neighbors - 1 if n_neighbors > 1 else 0
+    # if n_neighbors_in_guage >= n_neighbors:
+    #     n_neighbors_in_guage = n_neighbors - 1 if n_neighbors > 1 else 0
 
     # Build neighbor weights for each row from sparse graph without densifying
     # neighbor_weights has shape (n_samples, n_neighbors); positions without edges are 0
