@@ -145,7 +145,7 @@ def local_svd(
         data,
         knn_index,
         neighbor_weights,
-        n_neighbors=15,
+        n_neighbors=30,
         n_neighbors_in_guage=30,
         ):
     """
@@ -1243,7 +1243,7 @@ class FeatureMAP(BaseEstimator):
 
     Parameters
     ----------
-    n_neighbors: float (optional, default 15)
+    n_neighbors: float (optional, default 30)
         The size of local neighborhood (in terms of number of neighboring
         sample points) used for manifold approximation. Larger values
         result in more global views of the manifold, while smaller
@@ -1413,7 +1413,7 @@ class FeatureMAP(BaseEstimator):
 
     def __init__(
         self,
-        n_neighbors=15,
+        n_neighbors=30,
         n_components=2,
         metric="euclidean",
         metric_kwds=None,
