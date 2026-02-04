@@ -2408,7 +2408,7 @@ def plot_multiple_features_by_all_cells_given_clusters(
 
 
 
-def variation_feature_pp(adata):
+def variation_feature_pp(adata, apply_filter: bool = True):
     """
     Preprocess the variation feature for DGV analysis
 
@@ -2416,6 +2416,8 @@ def variation_feature_pp(adata):
     ----------
     adata : AnnData
         An annotated data matrix.
+    apply_filter : bool
+        Whether to apply low-variation/low-count filtering to the variation feature.
     """
     import anndata as ad
     layer = 'variation_feature'
@@ -2435,27 +2437,28 @@ def variation_feature_pp(adata):
     sc.pp.normalize_total(adata_var, target_sum=1e4 )
     sc.pp.log1p(adata_var, )
 
-    # Filtering variation for DGV 
-    adata_var.layers['var_filter'] = adata_var.X.copy()
-    # Filter low variation
-    idx = adata_var.layers['var_filter'] < np.max(adata_var.layers['var_filter']) * 0.2
-    # idx = adata_var.layers['var_filter'] < np.quantile(adata_var.layers['var_filter'], 0.2)
-    # print(f'Low var ratio is {np.sum(idx) / (idx.shape[0]*idx.shape[1])}')
-    adata_var.layers['var_filter'][idx] = 0
+    if apply_filter:
+        # Filtering variation for DGV
+        adata_var.layers['var_filter'] = adata_var.X.copy()
+        # Filter low variation
+        idx = adata_var.layers['var_filter'] < np.max(adata_var.layers['var_filter']) * 0.2
+        # idx = adata_var.layers['var_filter'] < np.quantile(adata_var.layers['var_filter'], 0.2)
+        # print(f'Low var ratio is {np.sum(idx) / (idx.shape[0]*idx.shape[1])}')
+        adata_var.layers['var_filter'][idx] = 0
 
-    # Filter variation by low count
-    if isinstance(adata.X, np.ndarray):
-        idx = adata.X < np.max(adata.X) * 0.2
-    else:
-        idx = adata.X.toarray() < np.max(adata.X.toarray()) * 0.2
+        # Filter variation by low count
+        if isinstance(adata.X, np.ndarray):
+            idx = adata.X < np.max(adata.X) * 0.2
+        else:
+            idx = adata.X.toarray() < np.max(adata.X.toarray()) * 0.2
 
-    # idx = adata.X.toarray() < np.quantile(adata.X.toarray()[np.nonzero(adata.X.toarray())], 0.2)
-    # idx = adata.X < np.max(adata.X) * 0.2
-    # print(f'Low var ratio by expression is {np.sum(idx) / (idx.shape[0]*idx.shape[1])}')
-    adata_var.layers['var_filter'][idx] = 0
-    # Normalization
-    sc.pp.normalize_total(adata_var, target_sum=1e4, layer='var_filter' )
-    sc.pp.log1p(adata_var, layer='var_filter')
+        # idx = adata.X.toarray() < np.quantile(adata.X.toarray()[np.nonzero(adata.X.toarray())], 0.2)
+        # idx = adata.X < np.max(adata.X) * 0.2
+        # print(f'Low var ratio by expression is {np.sum(idx) / (idx.shape[0]*idx.shape[1])}')
+        adata_var.layers['var_filter'][idx] = 0
+        # Normalization
+        sc.pp.normalize_total(adata_var, target_sum=1e4, layer='var_filter' )
+        sc.pp.log1p(adata_var, layer='var_filter')
 
     return adata_var
 
@@ -2575,4 +2578,3 @@ def featuremap_var_3d(emb_var_3d, color=None, symbol=None, marker_size=3):
     fig_3d.update_traces(marker_size=marker_size) # Modify the point size
     fig_3d.update_layout(autosize=False, width=500,height=500,)
     fig_3d.show()
-
