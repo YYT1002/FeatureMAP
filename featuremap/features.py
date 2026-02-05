@@ -2430,7 +2430,7 @@ def variation_feature_pp(adata, apply_filter: bool = True):
 
     adata_var.obs_names = adata.obs_names
     adata_var.var_names = adata.var_names
-    adata_var.obs['clusters'] = adata.obs['clusters'].copy()
+    # adata_var.obs['clusters'] = adata.obs['clusters'].copy()
     adata_var.layers['counts'] = adata.X.copy()
 
     # Normalization
