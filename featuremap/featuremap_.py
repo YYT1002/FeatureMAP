@@ -1035,19 +1035,22 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     # project_gauge_to_knn_graph(data, graph, featuremap_kwds=featuremap_kwds)
    
     '''
-    Variation embedding only
+    Variation embedding
     '''
-    
+
     T1 = time.time()
-    embedding = variation_embedding(data=data,featuremap_kwds=featuremap_kwds)  
+    variation_emb = variation_embedding(data=data,featuremap_kwds=featuremap_kwds)
     T2 = time.time()
 
     if output_variation == True:
         if verbose:
             print(ts() + f' Variation_embedding time is {T2-T1}')
 
-        return embedding
-    else:    
+        return variation_emb
+    else:
+        # Use variation embedding as initialization if init == "variation"
+        if isinstance(init, str) and init == "variation":
+            embedding = variation_emb
 
         # Embedding the gauge (rotation matrix) to low dim space
         if verbose:
@@ -1421,7 +1424,7 @@ class FeatureMAP(BaseEstimator):
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
-        init="spectral",
+        init="variation",
         min_dist=0.5,
         spread=1.0,
         low_memory=True,
@@ -1513,8 +1516,9 @@ class FeatureMAP(BaseEstimator):
         if isinstance(self.init, str) and self.init not in (
             "spectral",
             "random",
+            "variation",
         ):
-            raise ValueError('string init values must be "spectral" or "random"')
+            raise ValueError('string init values must be "spectral", "random", or "variation"')
         if (
             isinstance(self.init, np.ndarray)
             and self.init.shape[1] != self.n_components
