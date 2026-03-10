@@ -79,7 +79,20 @@ DISCONNECTION_DISTANCES = {
 
 
 # Preprocess the data by singular value decomposition
-def _preprocess_data(X): 
+def _preprocess_data(X, min_samples=1000, random_state=42):
+    X = np.asarray(X, dtype=np.float64)
+    n_original = X.shape[0]
+
+    # Gaussian augmentation for small datasets: pad to min_samples with data-fitted Gaussian
+    if n_original < min_samples:
+        rng = np.random.RandomState(random_state)
+        mean = np.mean(X, axis=0)
+        cov = np.cov(X, rowvar=False)
+        n_synthetic = min_samples - n_original
+        synthetic = rng.multivariate_normal(mean, cov, size=n_synthetic)
+        X = np.concatenate([X, synthetic], axis=0)
+        print(f"Augmented {n_original} samples to {X.shape[0]} with data-fitted Gaussian synthetic data")
+
     T1 = time.time()
     if X.shape[1] > 100 and X.shape[0] > 100:
         print("Performing SVD decomposition on the data")
@@ -89,11 +102,11 @@ def _preprocess_data(X):
         print(int(X.shape[0]-1))
         u, s, vh = scipy.sparse.linalg.svds(X, k=int(X.shape[0]-1), which='LM', random_state=42)
         X = np.matmul(u, np.diag(s))
-    else:    
+    else:
         vh = np.eye(X.shape[1])
     T2 = time.time()
     # print(f'SVD decomposition time is {T2-T1}')
-    return X, vh
+    return X, vh, n_original
 
 from sklearn.neighbors import NearestNeighbors
 def kernel_density_estimate(data, X, bw=0.5, min_radius=5, output_onlylogp=False, ):

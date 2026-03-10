@@ -101,7 +101,7 @@ def pseudotime_mst(adata, random_state, start_point_index):
         # check if 'X_featmap_v_3d' exists in obsm
         # if 'X_featmap_v_3d' not in adata.obsm.keys():
         if 'X_svd' not in adata.obsm.keys():
-            emb_svd, _ = featuremap_._preprocess_data(adata.X)
+            emb_svd, _, _ = featuremap_._preprocess_data(adata.X)
             adata.obsm['X_svd'] = emb_svd
         emb_svd = adata.obsm['X_svd']
         rnd = np.random.RandomState(i)
