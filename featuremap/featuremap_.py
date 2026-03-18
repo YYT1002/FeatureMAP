@@ -188,13 +188,11 @@ def local_svd(
     
     Returns
     --------
-    gauge_u: list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
-    singular_values: list of shape (n_neighbors_in_guage,); store single values for each frame
+    singular_values: list of shape (n_neighbors_in_guage,); store singular values for each frame
     gauge_vh: list of shape (n_neighbors_in_guage, d); store v
 
     """
     
-    gauge_u = []
     singular_values = []
     gauge_vh = []
     
@@ -216,13 +214,12 @@ def local_svd(
         sqrt_w_col = sqrt_w.reshape((sqrt_w.shape[0], 1))
         weighted = data_around_i * sqrt_w_col
 
-        u, s, vh = np.linalg.svd(weighted, full_matrices=False)
+        _, s, vh = np.linalg.svd(weighted, full_matrices=False)
 
-        gauge_u.append(u)
         singular_values.append(s)
         gauge_vh.append(vh)
 
-    return gauge_u, singular_values, gauge_vh
+    return singular_values, gauge_vh
 
 
 
@@ -346,7 +343,7 @@ def tangent_space_approximation(
             
     Returns
     -------
-    Local tangent space U, S, V
+    None. Stores the local singular values and basis vectors in ``featuremap_kwds``.
     """
     
     import os
@@ -378,12 +375,11 @@ def tangent_space_approximation(
                 w = float(val) if hasattr(val, "__float__") else float(val.toarray()[0, 0])
                 neighbor_weights[i, j] = w
 
-    gauge_u = [] # list of shape (n_neighbors_in_guage, n_neighbors_in_guage); store u
     singular_values = [] # list of shape (n_neighbors_in_guage,); store single values for each frame
     gauge_vh = [] # list of shape (n_neighbors_in_guage, d); store v
     
     T1 = time.time()
-    gauge_u, singular_values, gauge_vh = local_svd(
+    singular_values, gauge_vh = local_svd(
             data,
             knn_index,
             neighbor_weights,
