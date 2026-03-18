@@ -83,15 +83,24 @@ def _preprocess_data(X, min_samples=1000, random_state=42):
     X = np.asarray(X, dtype=np.float64)
     n_original = X.shape[0]
 
-    # Gaussian augmentation for small datasets: pad to min_samples with data-fitted Gaussian
+    # Gaussian augmentation for small datasets: append min_samples rows matched
+    # to the input feature-wise mean and standard deviation.
     if n_original < min_samples:
         rng = np.random.RandomState(random_state)
-        mean = np.mean(X, axis=0)
-        cov = np.cov(X, rowvar=False)
-        n_synthetic = min_samples - n_original
-        synthetic = rng.multivariate_normal(mean, cov, size=n_synthetic)
+        n_synthetic = int(min_samples)
+        feature_means = np.mean(X, axis=0)
+        feature_stds = np.std(X, axis=0)
+        feature_stds = np.nan_to_num(feature_stds, nan=0.0, posinf=0.0, neginf=0.0)
+        synthetic = rng.normal(
+            loc=feature_means,
+            scale=feature_stds,
+            size=(n_synthetic, X.shape[1]),
+        )
         X = np.concatenate([X, synthetic], axis=0)
-        print(f"Augmented {n_original} samples to {X.shape[0]} with data-fitted Gaussian synthetic data")
+        print(
+            f"Augmented {n_original} samples to {X.shape[0]} by adding "
+            f"{n_synthetic} Gaussian synthetic samples matched to feature mean/std"
+        )
 
     T1 = time.time()
     if X.shape[1] > 100 and X.shape[0] > 100:
