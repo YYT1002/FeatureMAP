@@ -224,7 +224,33 @@ def local_svd(
 
 
 import time
-def graph_convolution(features, knn_index, num_iterations, verbose=False, memory_target_mb=256, backend="auto"):   
+
+
+def _align_frame_rows_to_reference(reference_frame, frame):
+    """Align a k-frame to a reference k-frame with an orthogonal Procrustes step."""
+    cross_cov = reference_frame @ frame.T
+    u, _, vh = np.linalg.svd(cross_cov, full_matrices=False)
+    rotation = u @ vh
+    return rotation @ frame
+
+
+def _orthonormalize_frame_rows(frame):
+    """Project a k-frame back to the nearest row-orthonormal frame."""
+    if np.linalg.norm(frame) == 0.0:
+        return frame
+    u, _, vh = np.linalg.svd(frame, full_matrices=False)
+    return u @ vh
+
+
+def graph_convolution(
+    features,
+    knn_index,
+    num_iterations,
+    verbose=False,
+    memory_target_mb=256,
+    backend="auto",
+    align_top_k=None,
+):
     """
     Perform iterative neighbor averaging as a simple graph convolution.
 
@@ -232,6 +258,9 @@ def graph_convolution(features, knn_index, num_iterations, verbose=False, memory
         features (np.ndarray): Input feature matrix of shape (num_nodes, num_features, num_channels).
         knn_index (np.ndarray): Nearest neighbor indices of shape (num_nodes, num_neighbors).
         num_iterations (int, optional): Number of smoothing iterations. Default is 20.
+        align_top_k (int or None, optional): If set, align the top-k basis rows of each
+            neighbor frame to the center frame with an orthogonal Procrustes step before
+            averaging. This is intended for smoothing ``VH``-like tangent frames.
 
     Returns:
         np.ndarray: Smoothed feature matrix after `num_iterations` iterations.
@@ -248,6 +277,9 @@ def graph_convolution(features, knn_index, num_iterations, verbose=False, memory
     n_nodes, f_dim, c_dim = features.shape
     k = knn_index.shape[1]
     eps = 1e-12
+    if align_top_k is None:
+        align_top_k = 0
+    align_top_k = max(0, min(int(align_top_k), f_dim))
 
     use_sparse = False
     if backend == "sparse":
@@ -260,6 +292,9 @@ def graph_convolution(features, knn_index, num_iterations, verbose=False, memory
         est_batch = int(target_bytes // denom)
         if n_nodes >= 50_000 or est_batch < 32:
             use_sparse = True
+    if align_top_k > 0:
+        # Frame alignment is node-specific and nonlinear, so it cannot use the sparse matmul backend.
+        use_sparse = False
 
     if use_sparse:
         # Build a row-stochastic adjacency once, then apply repeated sparse matmuls
@@ -300,10 +335,37 @@ def graph_convolution(features, knn_index, num_iterations, verbose=False, memory
             for start in range(0, n_nodes, batch_size):
                 end = min(n_nodes, start + batch_size)
                 idx_batch = knn_index[start:end]  # (B, k)
+                valid_mask = idx_batch >= 0
+                safe_idx_batch = idx_batch.copy()
+                safe_idx_batch[~valid_mask] = 0
                 # Gather neighbor features: (B, k, f_dim, c_dim)
-                neighbor_features = features[idx_batch]
-                # Mean over neighbors -> (B, f_dim, c_dim)
-                mean_features = neighbor_features.mean(axis=1)
+                neighbor_features = features[safe_idx_batch].copy()
+
+                if align_top_k > 0:
+                    reference_frames = features[start:end, :align_top_k, :]
+                    for row_offset in range(end - start):
+                        ref_frame = reference_frames[row_offset]
+                        for neighbor_offset in range(k):
+                            if not valid_mask[row_offset, neighbor_offset]:
+                                neighbor_features[row_offset, neighbor_offset] = 0.0
+                                continue
+                            aligned_frame = _align_frame_rows_to_reference(
+                                ref_frame,
+                                neighbor_features[row_offset, neighbor_offset, :align_top_k, :],
+                            )
+                            neighbor_features[row_offset, neighbor_offset, :align_top_k, :] = aligned_frame
+                else:
+                    neighbor_features[~valid_mask] = 0.0
+
+                counts = valid_mask.sum(axis=1).astype(np.float32)
+                counts[counts == 0.0] = 1.0
+                mean_features = neighbor_features.sum(axis=1) / counts[:, np.newaxis, np.newaxis]
+
+                if align_top_k > 0:
+                    for row_offset in range(end - start):
+                        mean_features[row_offset, :align_top_k, :] = _orthonormalize_frame_rows(
+                            mean_features[row_offset, :align_top_k, :]
+                        )
                 # Normalize across channel dimension per feature row
                 norms = np.linalg.norm(mean_features, axis=2, keepdims=True)
                 norms = np.maximum(norms, eps)
@@ -416,7 +478,18 @@ def tangent_space_approximation(
             num_iterations = int(np.log2(data.shape[0])*2)
         # num_iterations  = 42
 
-    gauge_vh, featuremap_kwds["VH"] = graph_convolution(gauge_vh, knn_index, num_iterations=num_iterations, verbose=featuremap_kwds['verbose'])
+    align_top_k = int(featuremap_kwds.get("gcn_align_top_k", 2))
+    align_top_k = max(0, min(align_top_k, gauge_vh.shape[1]))
+    featuremap_kwds["gcn_align_top_k"] = align_top_k
+    gauge_vh, gcn_results = graph_convolution(
+        gauge_vh,
+        knn_index,
+        num_iterations=num_iterations,
+        verbose=featuremap_kwds['verbose'],
+        align_top_k=align_top_k,
+    )
+    if "VH" in gcn_results:
+        featuremap_kwds["VH"] = gcn_results["VH"]
 
     featuremap_kwds["vh_smoothed"] = np.array(gauge_vh).astype(np.float32, copy=True)
 
