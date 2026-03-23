@@ -242,6 +242,318 @@ def _orthonormalize_frame_rows(frame):
     return u @ vh
 
 
+def _pc_accumulation(arr, threshold):
+    arr_sum = float(np.sum(np.square(arr)))
+    if arr_sum <= 0.0:
+        return 0
+
+    temp_sum = 0.0
+    for i in range(arr.shape[0]):
+        temp_sum += arr[i] * arr[i]
+        if temp_sum > arr_sum * threshold:
+            return i
+
+    return max(arr.shape[0] - 1, 0)
+
+
+def _compute_variation_pc(
+    gauge_vh,
+    singular_values_collection,
+    threshold,
+    intrinsic_dim=None,
+    k=None,
+    verbose=False,
+):
+    if intrinsic_dim is None:
+        intrinsic_dim = np.zeros(gauge_vh.shape[0], dtype=np.int32)
+        for i in range(gauge_vh.shape[0]):
+            intrinsic_dim[i] = _pc_accumulation(singular_values_collection[i], threshold)
+    else:
+        intrinsic_dim = np.asarray(intrinsic_dim, dtype=np.int32)
+
+    if k is None:
+        k = int(np.median(intrinsic_dim))
+    k = max(0, min(int(k), gauge_vh.shape[1]))
+
+    if verbose:
+        print(ts() + f' The intrinsic dimension median is {k}')
+
+    variation_pc = np.sqrt(np.einsum('ijk, ijk->ik', gauge_vh[:, :k, :], gauge_vh[:, :k, :]))
+    return variation_pc.astype(np.float32, copy=False), k, intrinsic_dim
+
+
+def _default_gcn_max_iterations(n_samples):
+    n_samples = max(int(n_samples), 2)
+    if n_samples < 5000:
+        value = int(np.log2(n_samples) / 2.0)
+    elif n_samples < 10000:
+        value = int(np.log2(n_samples))
+    else:
+        value = int(np.log2(n_samples) * 2.0)
+    return max(value, 1)
+
+
+def _build_row_normalized_knn_adjacency(knn_index):
+    n_nodes, k = knn_index.shape
+    idx = knn_index.reshape(-1)
+    rows = np.repeat(np.arange(n_nodes, dtype=np.int32), k)
+    valid_mask = idx >= 0
+    rows = rows[valid_mask]
+    cols = idx[valid_mask].astype(np.int32, copy=False)
+    if rows.size == 0:
+        return scipy.sparse.csr_matrix((n_nodes, n_nodes), dtype=np.float32)
+
+    counts = np.bincount(rows, minlength=n_nodes).astype(np.float32, copy=False)
+    data = np.divide(
+        1.0,
+        counts[rows],
+        out=np.zeros(rows.shape[0], dtype=np.float32),
+        where=counts[rows] > 0,
+    )
+    return scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes))
+
+
+def _compute_graph_convolution_batch_size(n_nodes, k, f_dim, c_dim, memory_target_mb):
+    target_bytes = max(1, int(memory_target_mb * 1024 * 1024))
+    denom = max(1, 4 * k * f_dim * c_dim)
+    batch_size = int(target_bytes // denom)
+    batch_size = max(batch_size, 32)
+    return min(batch_size, n_nodes)
+
+
+def _prepare_graph_convolution_batches(knn_index, batch_size):
+    n_nodes = knn_index.shape[0]
+    batch_metadata = []
+    for start in range(0, n_nodes, batch_size):
+        end = min(n_nodes, start + batch_size)
+        idx_batch = knn_index[start:end]
+        valid_mask = idx_batch >= 0
+        safe_idx_batch = idx_batch.copy()
+        safe_idx_batch[~valid_mask] = 0
+        counts = valid_mask.sum(axis=1).astype(np.float32)
+        counts[counts == 0.0] = 1.0
+        inv_counts = (1.0 / counts).astype(np.float32, copy=False)[:, np.newaxis, np.newaxis]
+        batch_metadata.append((start, end, safe_idx_batch, valid_mask, inv_counts))
+    return batch_metadata
+
+
+def _batched_align_frame_rows_to_reference(reference_frames, neighbor_frames):
+    cross_cov = np.einsum("bic,bkjc->bkij", reference_frames, neighbor_frames, optimize=True)
+    u, _, vh = np.linalg.svd(cross_cov, full_matrices=False)
+    rotation = np.matmul(u, vh)
+    return np.matmul(rotation, neighbor_frames)
+
+
+def _batched_orthonormalize_frame_rows(frames, eps=1e-12):
+    frames = np.asarray(frames)
+    if frames.size == 0:
+        return frames.copy()
+
+    original_shape = frames.shape
+    flat = frames.reshape(-1, original_shape[-2], original_shape[-1])
+    output = flat.copy()
+    valid = np.linalg.norm(flat, axis=(1, 2)) > eps
+    if np.any(valid):
+        u, _, vh = np.linalg.svd(flat[valid], full_matrices=False)
+        output[valid] = np.matmul(u, vh)
+    return output.reshape(original_shape)
+
+
+def _graph_convolution_dense_legacy(
+    features,
+    batch_metadata,
+    num_iterations,
+    align_top_k,
+    eps,
+    iteration_callback=None,
+):
+    featuremap_results = {}
+    completed_iterations = 0
+    stopped_early = False
+    smoothed_features = np.empty_like(features)
+
+    iteration = 0
+    while num_iterations is None or iteration < num_iterations:
+        for start, end, safe_idx_batch, valid_mask, inv_counts in batch_metadata:
+            neighbor_features = features[safe_idx_batch]
+
+            if align_top_k > 0:
+                reference_frames = features[start:end, :align_top_k, :]
+                for row_offset in range(end - start):
+                    ref_frame = reference_frames[row_offset]
+                    for neighbor_offset in range(safe_idx_batch.shape[1]):
+                        if not valid_mask[row_offset, neighbor_offset]:
+                            neighbor_features[row_offset, neighbor_offset] = 0.0
+                            continue
+                        aligned_frame = _align_frame_rows_to_reference(
+                            ref_frame,
+                            neighbor_features[row_offset, neighbor_offset, :align_top_k, :],
+                        )
+                        neighbor_features[row_offset, neighbor_offset, :align_top_k, :] = aligned_frame
+            else:
+                neighbor_features[~valid_mask] = 0.0
+
+            mean_features = neighbor_features.sum(axis=1) * inv_counts
+
+            if align_top_k > 0:
+                for row_offset in range(end - start):
+                    mean_features[row_offset, :align_top_k, :] = _orthonormalize_frame_rows(
+                        mean_features[row_offset, :align_top_k, :]
+                    )
+
+            norms = np.linalg.norm(mean_features, axis=2, keepdims=True)
+            norms = np.maximum(norms, eps)
+            smoothed_features[start:end] = mean_features / norms
+
+        features, smoothed_features = smoothed_features, features
+        completed_iterations = iteration + 1
+        if iteration == 0:
+            featuremap_results["VH"] = features.astype(np.float32, copy=True)
+        if iteration_callback is not None:
+            if iteration_callback(iteration + 1, features):
+                stopped_early = True
+                break
+        iteration += 1
+
+    featuremap_results["completed_iterations"] = int(completed_iterations)
+    featuremap_results["stopped_early"] = bool(stopped_early)
+    return features, featuremap_results
+
+
+def _graph_convolution_dense_aligned_fast(
+    features,
+    batch_metadata,
+    num_iterations,
+    align_top_k,
+    eps,
+    adj_tail=None,
+    iteration_callback=None,
+):
+    featuremap_results = {}
+    completed_iterations = 0
+    stopped_early = False
+    n_nodes, f_dim, c_dim = features.shape
+    tail_offset = int(align_top_k)
+    tail_dim = f_dim - tail_offset
+    smoothed_features = np.empty_like(features)
+
+    iteration = 0
+    while num_iterations is None or iteration < num_iterations:
+        head = features[:, :tail_offset, :]
+        if adj_tail is not None and tail_dim > 0:
+            tail = features[:, tail_offset:, :].reshape(n_nodes, tail_dim * c_dim)
+            smoothed_tail = adj_tail.dot(tail).reshape(n_nodes, tail_dim, c_dim)
+            smoothed_features[:, tail_offset:, :] = smoothed_tail
+
+        for start, end, safe_idx_batch, valid_mask, inv_counts in batch_metadata:
+            reference_frames = head[start:end]
+            neighbor_head = head[safe_idx_batch]
+            aligned_head = _batched_align_frame_rows_to_reference(reference_frames, neighbor_head)
+            aligned_head[~valid_mask] = 0.0
+            mean_head = aligned_head.sum(axis=1) * inv_counts
+            smoothed_features[start:end, :tail_offset, :] = _batched_orthonormalize_frame_rows(
+                mean_head,
+                eps=eps,
+            )
+
+        norms = np.linalg.norm(smoothed_features, axis=2, keepdims=True)
+        norms = np.maximum(norms, eps)
+        np.divide(smoothed_features, norms, out=smoothed_features)
+        features, smoothed_features = smoothed_features, features
+        completed_iterations = iteration + 1
+        if iteration == 0:
+            featuremap_results["VH"] = features.astype(np.float32, copy=True)
+        if iteration_callback is not None:
+            if iteration_callback(iteration + 1, features):
+                stopped_early = True
+                break
+        iteration += 1
+
+    featuremap_results["completed_iterations"] = int(completed_iterations)
+    featuremap_results["stopped_early"] = bool(stopped_early)
+    return features, featuremap_results
+
+
+def _relative_frobenius_change(current, previous, eps=1e-12):
+    current = np.asarray(current)
+    previous = np.asarray(previous)
+    numerator = np.linalg.norm(current - previous)
+    denominator = max(np.linalg.norm(previous), eps)
+    return float(numerator / denominator)
+
+
+def _compute_log_trace_elbow_step(step_ids, values, min_value=1e-12):
+    step_ids = np.asarray(step_ids, dtype=np.int32)
+    values = np.asarray(values, dtype=np.float64)
+    if step_ids.size == 0 or values.size == 0 or step_ids.size != values.size:
+        raise ValueError("step_ids and values must be non-empty arrays of the same length")
+
+    current_step = int(step_ids[-1])
+    if step_ids.size < 3:
+        return current_step
+
+    x = step_ids.astype(np.float64, copy=False)
+    x_min = float(x[0])
+    x_max = float(x[-1])
+    if not np.isfinite(x_min) or not np.isfinite(x_max) or x_max <= x_min:
+        return current_step
+
+    logged = np.log10(np.maximum(values, float(min_value)))
+    y_min = float(np.min(logged))
+    y_max = float(np.max(logged))
+    if not np.isfinite(y_min) or not np.isfinite(y_max) or y_max <= y_min:
+        return current_step
+
+    x_norm = (x - x_min) / (x_max - x_min)
+    y_norm = (logged - y_min) / (y_max - y_min)
+
+    start = np.array([x_norm[0], y_norm[0]], dtype=np.float64)
+    end = np.array([x_norm[-1], y_norm[-1]], dtype=np.float64)
+    chord = end - start
+    chord_norm = float(np.linalg.norm(chord))
+    if not np.isfinite(chord_norm) or chord_norm <= 0.0:
+        return current_step
+
+    points = np.column_stack((x_norm, y_norm))
+    offsets = points - start
+    distances = np.abs(chord[0] * offsets[:, 1] - chord[1] * offsets[:, 0]) / chord_norm
+    elbow_idx = int(np.argmax(distances))
+    return int(step_ids[elbow_idx])
+
+
+def _evaluate_online_log_delta_elbow_stop(
+    step_ids,
+    delta_values,
+    elbow_candidate_history,
+    min_steps,
+    stability,
+    tolerance_steps,
+    lookahead,
+):
+    step_ids = np.asarray(step_ids, dtype=np.int32)
+    delta_values = np.asarray(delta_values, dtype=np.float64)
+    if step_ids.size == 0 or delta_values.size == 0 or step_ids.size != delta_values.size:
+        raise ValueError("step_ids and delta_values must be non-empty arrays of the same length")
+
+    current_step = int(step_ids[-1])
+    if current_step < int(min_steps):
+        return -1, -1, False, False
+
+    delta_elbow_step = int(_compute_log_trace_elbow_step(step_ids, delta_values))
+    elbow_candidate_history.append(delta_elbow_step)
+
+    candidate_step = delta_elbow_step
+    stable = False
+    if len(elbow_candidate_history) >= int(stability):
+        window = elbow_candidate_history[-int(stability):]
+        if max(window) - min(window) <= int(tolerance_steps):
+            stable = True
+            candidate_step = int(np.rint(np.median(np.asarray(window, dtype=np.float64))))
+
+    eligible = stable and current_step >= candidate_step + int(lookahead)
+    return delta_elbow_step, candidate_step, stable, eligible
+
+
 def graph_convolution(
     features,
     knn_index,
@@ -250,6 +562,7 @@ def graph_convolution(
     memory_target_mb=256,
     backend="auto",
     align_top_k=None,
+    iteration_callback=None,
 ):
     """
     Perform iterative neighbor averaging as a simple graph convolution.
@@ -257,39 +570,50 @@ def graph_convolution(
     Args:
         features (np.ndarray): Input feature matrix of shape (num_nodes, num_features, num_channels).
         knn_index (np.ndarray): Nearest neighbor indices of shape (num_nodes, num_neighbors).
-        num_iterations (int, optional): Number of smoothing iterations. Default is 20.
+        num_iterations (int or None): Maximum number of smoothing iterations. If
+            ``None``, iterate until ``iteration_callback`` requests an early stop.
         align_top_k (int or None, optional): If set, align the top-k basis rows of each
             neighbor frame to the center frame with an orthogonal Procrustes step before
             averaging. This is intended for smoothing ``VH``-like tangent frames.
+        iteration_callback (callable or None, optional): If set, called after each
+            iteration with `(step_id, features)`, where `step_id` is 1-based.
+            Returning a truthy value stops the convolution early.
 
     Returns:
-        np.ndarray: Smoothed feature matrix after `num_iterations` iterations.
-        dict: Dictionary storing the first averaged result under the key "VH".
+        np.ndarray: Smoothed feature matrix after the completed smoothing iterations.
+        dict: Dictionary storing the first averaged result under the key "VH" and
+            iteration metadata under ``completed_iterations`` and ``stopped_early``.
     """
     if verbose:
-        print(ts() + f' Applying graph convolution for {num_iterations} iterations...')
+        if num_iterations is None:
+            print(ts() + ' Applying graph convolution until convergence...')
+        else:
+            print(ts() + f' Applying graph convolution for {num_iterations} iterations...')
     start_time = time.time()
 
     # Dictionary to store intermediate results
     featuremap_results = {}
+    completed_iterations = 0
+    stopped_early = False
 
     # Iterative neighbor averaging
     n_nodes, f_dim, c_dim = features.shape
     k = knn_index.shape[1]
     eps = 1e-12
+    if num_iterations is None and iteration_callback is None:
+        raise ValueError("graph_convolution with num_iterations=None requires an iteration_callback")
     if align_top_k is None:
         align_top_k = 0
     align_top_k = max(0, min(int(align_top_k), f_dim))
+    use_aligned_fastpath = 0 < align_top_k <= 4
 
     use_sparse = False
     if backend == "sparse":
         use_sparse = True
     elif backend == "auto":
-        # Prefer sparse backend for very large n, or if temporary gather would exceed target memory
-        # Estimate gather tensor size per batch for batch approach
-        target_bytes = max(1, int(memory_target_mb * 1024 * 1024))
-        denom = max(1, 4 * k * f_dim * c_dim)
-        est_batch = int(target_bytes // denom)
+        est_batch = _compute_graph_convolution_batch_size(
+            n_nodes, k, f_dim, c_dim, memory_target_mb
+        )
         if n_nodes >= 50_000 or est_batch < 32:
             use_sparse = True
     if align_top_k > 0:
@@ -298,18 +622,10 @@ def graph_convolution(
 
     if use_sparse:
         # Build a row-stochastic adjacency once, then apply repeated sparse matmuls
-        # Filter invalid neighbors (-1)
-        idx = knn_index.reshape(-1)
-        rows = np.repeat(np.arange(n_nodes, dtype=np.int32), k)
-        mask = idx >= 0
-        rows = rows[mask]
-        cols = idx[mask].astype(np.int32, copy=False)
-        # Row-normalized weights (mean over neighbors)
-        data = np.full(rows.shape[0], 1.0 / float(k), dtype=np.float32)
-        # Build CSR adjacency
-        adj = scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes))
+        adj = _build_row_normalized_knn_adjacency(knn_index)
 
-        for iteration in range(num_iterations):
+        iteration = 0
+        while num_iterations is None or iteration < num_iterations:
             # Flatten features to (n_nodes, f_dim * c_dim)
             flat = features.reshape(n_nodes, f_dim * c_dim)
             flat = adj.dot(flat)
@@ -318,62 +634,43 @@ def graph_convolution(
             norms = np.linalg.norm(smoothed, axis=2, keepdims=True)
             norms = np.maximum(norms, eps)
             features = smoothed / norms
+            completed_iterations = iteration + 1
             if iteration == 0:
                 featuremap_results["VH"] = features.astype(np.float32, copy=True)
+            if iteration_callback is not None:
+                if iteration_callback(iteration + 1, features):
+                    stopped_early = True
+                    break
+            iteration += 1
+        featuremap_results["completed_iterations"] = int(completed_iterations)
+        featuremap_results["stopped_early"] = bool(stopped_early)
     else:
-        # Vectorized with batching and advanced indexing
-        target_bytes = max(1, int(memory_target_mb * 1024 * 1024))
-        denom = max(1, 4 * k * f_dim * c_dim)
-        batch_size = int(target_bytes // denom)
-        if batch_size < 32:
-            batch_size = 32
-        batch_size = min(batch_size, n_nodes)
-
-        for iteration in range(num_iterations):
-            smoothed_features = np.empty_like(features)
-
-            for start in range(0, n_nodes, batch_size):
-                end = min(n_nodes, start + batch_size)
-                idx_batch = knn_index[start:end]  # (B, k)
-                valid_mask = idx_batch >= 0
-                safe_idx_batch = idx_batch.copy()
-                safe_idx_batch[~valid_mask] = 0
-                # Gather neighbor features: (B, k, f_dim, c_dim)
-                neighbor_features = features[safe_idx_batch].copy()
-
-                if align_top_k > 0:
-                    reference_frames = features[start:end, :align_top_k, :]
-                    for row_offset in range(end - start):
-                        ref_frame = reference_frames[row_offset]
-                        for neighbor_offset in range(k):
-                            if not valid_mask[row_offset, neighbor_offset]:
-                                neighbor_features[row_offset, neighbor_offset] = 0.0
-                                continue
-                            aligned_frame = _align_frame_rows_to_reference(
-                                ref_frame,
-                                neighbor_features[row_offset, neighbor_offset, :align_top_k, :],
-                            )
-                            neighbor_features[row_offset, neighbor_offset, :align_top_k, :] = aligned_frame
-                else:
-                    neighbor_features[~valid_mask] = 0.0
-
-                counts = valid_mask.sum(axis=1).astype(np.float32)
-                counts[counts == 0.0] = 1.0
-                mean_features = neighbor_features.sum(axis=1) / counts[:, np.newaxis, np.newaxis]
-
-                if align_top_k > 0:
-                    for row_offset in range(end - start):
-                        mean_features[row_offset, :align_top_k, :] = _orthonormalize_frame_rows(
-                            mean_features[row_offset, :align_top_k, :]
-                        )
-                # Normalize across channel dimension per feature row
-                norms = np.linalg.norm(mean_features, axis=2, keepdims=True)
-                norms = np.maximum(norms, eps)
-                smoothed_features[start:end] = mean_features / norms
-
-            features = smoothed_features
-            if iteration == 0:
-                featuremap_results["VH"] = features.astype(np.float32, copy=True)
+        batch_size = _compute_graph_convolution_batch_size(
+            n_nodes, k, f_dim, c_dim, memory_target_mb
+        )
+        batch_metadata = _prepare_graph_convolution_batches(knn_index, batch_size)
+        if use_aligned_fastpath:
+            adj_tail = None
+            if align_top_k < f_dim:
+                adj_tail = _build_row_normalized_knn_adjacency(knn_index)
+            features, featuremap_results = _graph_convolution_dense_aligned_fast(
+                features,
+                batch_metadata,
+                num_iterations=num_iterations,
+                align_top_k=align_top_k,
+                eps=eps,
+                adj_tail=adj_tail,
+                iteration_callback=iteration_callback,
+            )
+        else:
+            features, featuremap_results = _graph_convolution_dense_legacy(
+                features,
+                batch_metadata,
+                num_iterations=num_iterations,
+                align_top_k=align_top_k,
+                eps=eps,
+                iteration_callback=iteration_callback,
+            )
 
     end_time = time.time()
     if verbose:
@@ -465,20 +762,133 @@ def tangent_space_approximation(
     knn_index = knn_index
     gauge_vh = np.array(gauge_vh)
 
-    num_iterations = featuremap_kwds["gcn_iterations"]
+    gcn_max_iterations = featuremap_kwds.get("gcn_max_iterations")
+    if gcn_max_iterations is None:
+        gcn_max_iterations = featuremap_kwds.get("gcn_iterations")
+    threshold = featuremap_kwds["threshold"]
+    collect_variation_pc_steps = bool(featuremap_kwds.get("collect_variation_pc_steps", False))
+    gcn_stop_mode = featuremap_kwds.get("gcn_stop_mode", "auto_delta_patience")
+    if gcn_stop_mode == "auto_hybrid_rw":
+        gcn_stop_mode = "auto_delta_patience"
+    gcn_stop_delta_tol = float(featuremap_kwds.get("gcn_stop_delta_tol", 0.08))
+    gcn_stop_patience = int(featuremap_kwds.get("gcn_stop_patience", 2))
+    gcn_elbow_min_steps = int(featuremap_kwds.get("gcn_elbow_min_steps", 14))
+    gcn_elbow_stability = int(featuremap_kwds.get("gcn_elbow_stability", 4))
+    gcn_elbow_tolerance_steps = int(featuremap_kwds.get("gcn_elbow_tolerance_steps", 1))
+    gcn_elbow_lookahead = int(featuremap_kwds.get("gcn_elbow_lookahead", 2))
 
-    if num_iterations is not None:
-        num_iterations = num_iterations
+    if gcn_max_iterations is None:
+        num_iterations = None
     else:
-        if data.shape[0] < 5000:
-            num_iterations = int(np.log2(data.shape[0])/2)
-        elif data.shape[0] < 10000:
-            num_iterations = int(np.log2(data.shape[0])) 
-        else:
-            num_iterations = int(np.log2(data.shape[0])*2)
-        # num_iterations  = 42
+        num_iterations = max(int(gcn_max_iterations), 1)
+    featuremap_kwds["gcn_max_iterations_used"] = None if num_iterations is None else int(num_iterations)
 
-    align_top_k = int(featuremap_kwds.get("gcn_align_top_k", 2))
+    variation_pc_k = featuremap_kwds.get("variation_pc_k")
+    variation_pc_intrinsic_dim = featuremap_kwds.get("variation_pc_intrinsic_dim")
+    if variation_pc_k is None or variation_pc_intrinsic_dim is None:
+        _, variation_pc_k, variation_pc_intrinsic_dim = _compute_variation_pc(
+            gauge_vh,
+            featuremap_kwds["Singular_value"],
+            threshold,
+            verbose=False,
+        )
+        featuremap_kwds["variation_pc_k"] = int(variation_pc_k)
+        featuremap_kwds["variation_pc_intrinsic_dim"] = np.asarray(
+            variation_pc_intrinsic_dim, dtype=np.int32
+        ).copy()
+
+    variation_pc_step0, _, _ = _compute_variation_pc(
+        gauge_vh,
+        featuremap_kwds["Singular_value"],
+        threshold,
+        intrinsic_dim=variation_pc_intrinsic_dim,
+        k=variation_pc_k,
+        verbose=False,
+    )
+    previous_variation_pc = variation_pc_step0
+    variation_pc_steps = []
+    variation_pc_step_ids = []
+    gcn_stop_step_ids = []
+    gcn_stop_relative_change = []
+    gcn_stop_eligible = []
+    gcn_stop_elbow_delta_step = []
+    gcn_stop_elbow_candidate_step = []
+    gcn_stop_elbow_stable = []
+    consecutive_eligible = 0
+    elbow_candidate_history = []
+    if collect_variation_pc_steps:
+        variation_pc_steps.append(variation_pc_step0)
+        variation_pc_step_ids.append(0)
+
+    def iteration_callback(step_id, step_features):
+        nonlocal previous_variation_pc, consecutive_eligible
+        variation_pc_step, _, _ = _compute_variation_pc(
+            step_features,
+            featuremap_kwds["Singular_value"],
+            threshold,
+            intrinsic_dim=variation_pc_intrinsic_dim,
+            k=variation_pc_k,
+            verbose=False,
+        )
+        if collect_variation_pc_steps:
+            variation_pc_steps.append(variation_pc_step)
+            variation_pc_step_ids.append(int(step_id))
+        relative_change = _relative_frobenius_change(variation_pc_step, previous_variation_pc)
+        elbow_delta_step = -1
+        elbow_candidate_step = -1
+        elbow_stable = False
+        eligible = False
+        should_stop = False
+
+        if gcn_stop_mode == "auto_delta_patience":
+            eligible = relative_change <= gcn_stop_delta_tol
+            consecutive_eligible = consecutive_eligible + 1 if eligible else 0
+            should_stop = eligible and consecutive_eligible >= gcn_stop_patience
+            if should_stop and featuremap_kwds["verbose"]:
+                print(
+                    ts()
+                    + " Auto-stopping graph convolution at iteration "
+                    + f"{step_id} (delta={relative_change:.4g})"
+                )
+        elif gcn_stop_mode == "auto_elbow_log_delta":
+            elbow_delta_step, elbow_candidate_step, elbow_stable, eligible = (
+                _evaluate_online_log_delta_elbow_stop(
+                    np.asarray(gcn_stop_step_ids + [int(step_id)], dtype=np.int32),
+                    np.asarray(gcn_stop_relative_change + [relative_change], dtype=np.float64),
+                    elbow_candidate_history,
+                    min_steps=gcn_elbow_min_steps,
+                    stability=gcn_elbow_stability,
+                    tolerance_steps=gcn_elbow_tolerance_steps,
+                    lookahead=gcn_elbow_lookahead,
+                )
+            )
+            consecutive_eligible = 0
+            should_stop = bool(eligible)
+            if should_stop and featuremap_kwds["verbose"]:
+                print(
+                    ts()
+                    + " Auto-stopping graph convolution at iteration "
+                    + f"{step_id} (delta={relative_change:.4g}, elbow={elbow_candidate_step})"
+                )
+        else:
+            raise ValueError(
+                'gcn_stop_mode must be either "auto_delta_patience" or "auto_elbow_log_delta"'
+            )
+
+        gcn_stop_step_ids.append(int(step_id))
+        gcn_stop_relative_change.append(relative_change)
+        gcn_stop_eligible.append(bool(eligible))
+        gcn_stop_elbow_delta_step.append(int(elbow_delta_step))
+        gcn_stop_elbow_candidate_step.append(int(elbow_candidate_step))
+        gcn_stop_elbow_stable.append(bool(elbow_stable))
+        previous_variation_pc = variation_pc_step
+        return should_stop
+
+    raw_align_top_k = featuremap_kwds.get("gcn_align_top_k")
+    if raw_align_top_k is None:
+        align_top_k = int(variation_pc_k)
+    else:
+        align_top_k = int(raw_align_top_k)
     align_top_k = max(0, min(align_top_k, gauge_vh.shape[1]))
     featuremap_kwds["gcn_align_top_k"] = align_top_k
     gauge_vh, gcn_results = graph_convolution(
@@ -487,11 +897,38 @@ def tangent_space_approximation(
         num_iterations=num_iterations,
         verbose=featuremap_kwds['verbose'],
         align_top_k=align_top_k,
+        iteration_callback=iteration_callback,
     )
     if "VH" in gcn_results:
         featuremap_kwds["VH"] = gcn_results["VH"]
 
     featuremap_kwds["vh_smoothed"] = np.array(gauge_vh).astype(np.float32, copy=True)
+    featuremap_kwds["gcn_stop_mode"] = gcn_stop_mode
+    featuremap_kwds["gcn_stop_step_ids"] = np.asarray(gcn_stop_step_ids, dtype=np.int32)
+    featuremap_kwds["gcn_stop_relative_change"] = np.asarray(
+        gcn_stop_relative_change, dtype=np.float32
+    )
+    featuremap_kwds["gcn_stop_eligible"] = np.asarray(gcn_stop_eligible, dtype=bool)
+    featuremap_kwds["gcn_stop_elbow_delta_step"] = np.asarray(
+        gcn_stop_elbow_delta_step, dtype=np.int32
+    )
+    featuremap_kwds["gcn_stop_elbow_candidate_step"] = np.asarray(
+        gcn_stop_elbow_candidate_step, dtype=np.int32
+    )
+    featuremap_kwds["gcn_stop_elbow_stable"] = np.asarray(
+        gcn_stop_elbow_stable, dtype=bool
+    )
+    featuremap_kwds["gcn_chosen_iteration"] = int(gcn_results.get("completed_iterations", 0))
+    featuremap_kwds["gcn_stop_reason"] = (
+        "auto_converged" if gcn_results.get("stopped_early", False) else "max_iterations"
+    )
+    if collect_variation_pc_steps:
+        featuremap_kwds["variation_pc_steps"] = np.stack(variation_pc_steps, axis=0).astype(
+            np.float32, copy=False
+        )
+        featuremap_kwds["variation_pc_step_ids"] = np.asarray(
+            variation_pc_step_ids, dtype=np.int32
+        )
 
 
 
@@ -854,33 +1291,16 @@ def variation_embedding(
     gauge_vh = featuremap_kwds["vh_smoothed"]
     singular_values_collection = featuremap_kwds["Singular_value"]
     
-    # Compute intrinsic dimensionality locally
-    def pc_accumulation(arr, threshold):
-        arr_sum = float(np.sum(np.square(arr)))
-        if arr_sum <= 0.0:
-            return 0
-
-        temp_sum = 0.0
-        for i in range(arr.shape[0]):
-            temp_sum += arr[i] * arr[i]
-            if temp_sum > arr_sum * threshold:
-                return i
-
-        # If the threshold is never exceeded (e.g., threshold >= 1), fall back to the last index
-        return max(arr.shape[0] - 1, 0)
-    
-    # threshold = 0.5
-    intrinsic_dim = np.zeros(data.shape[0]).astype(int)
-    for i in range(data.shape[0]):            
-        intrinsic_dim[i] = pc_accumulation(singular_values_collection[i], threshold)
-    # Compute the gene norm in top k PCs (norm of the arrow in biplot)
-    k = int(np.median(intrinsic_dim))
-    if featuremap_kwds['verbose']:
-        print(ts() + f' The intrinsic dimension median is {k}')
-    
-    # gene_var_norm = np.linalg.norm(gauge_vh[:, :k, :], axis=1)
-    gene_var_norm = np.sqrt(np.einsum('ijk, ijk->ik', gauge_vh[:, :k, :], gauge_vh[:, :k, :]))
-
+    gene_var_norm, k, intrinsic_dim = _compute_variation_pc(
+        gauge_vh,
+        singular_values_collection,
+        threshold,
+        intrinsic_dim=featuremap_kwds.get("variation_pc_intrinsic_dim"),
+        k=featuremap_kwds.get("variation_pc_k"),
+        verbose=featuremap_kwds['verbose'],
+    )
+    featuremap_kwds["variation_pc_k"] = int(k)
+    featuremap_kwds["variation_pc_intrinsic_dim"] = np.asarray(intrinsic_dim, dtype=np.int32).copy()
     featuremap_kwds["variation_pc"] = np.array(gene_var_norm).astype(np.float32, copy=True)
     
     
@@ -1502,6 +1922,49 @@ class FeatureMAP(BaseEstimator):
     threshold: float (optional, default 0.9)
         The threshold to compute the intrinsic dimensionality of the data. The intrinsic dimensionality is computed
         by the number of principal components that accumulates 90% of the variance of the data.
+
+    gcn_iterations: int or None (optional, default None)
+        Deprecated alias for ``gcn_max_iterations``. FeatureMAP now always auto-stops graph smoothing and this
+        value is treated as an upper bound rather than an exact number of iterations.
+
+    gcn_max_iterations: int or None (optional, default None)
+        Hard cap for graph-convolution iterations before the auto-stop rule gives up and returns the current state.
+        If None, graph smoothing runs without a preset cap and stops only when the auto-stop rule triggers.
+
+    gcn_align_top_k: int or None (optional, default None)
+        Number of leading tangent-frame rows to align before graph averaging. If None, FeatureMAP uses
+        ``variation_pc_k`` as the default alignment rank.
+
+    gcn_stop_mode: str (optional, default "auto_delta_patience")
+        Auto-stop policy for graph smoothing. ``"auto_delta_patience"`` uses only the delta threshold plus
+        patience, while ``"auto_elbow_log_delta"`` uses the online log-elbow of the delta curve.
+
+    gcn_stop_delta_tol: float (optional, default 0.08)
+        Relative Frobenius-norm tolerance on consecutive ``variation_pc`` updates for the
+        ``"auto_delta_patience"`` stop mode.
+
+    gcn_stop_rw_tol: float or None (optional, default None)
+        Deprecated and ignored. Passing a value emits a warning and has no effect.
+
+    gcn_stop_patience: int (optional, default 2)
+        Number of consecutive eligible steps required before graph smoothing stops early in
+        the ``"auto_delta_patience"`` mode.
+
+    gcn_elbow_min_steps: int (optional, default 14)
+        Minimum number of smoothing steps before ``"auto_elbow_log_delta"`` starts estimating
+        an elbow from the delta trace.
+
+    gcn_elbow_stability: int (optional, default 4)
+        Number of consecutive provisional elbow estimates that must agree before the elbow is
+        treated as stable in ``"auto_elbow_log_delta"``.
+
+    gcn_elbow_tolerance_steps: int (optional, default 1)
+        Maximum spread, in step units, allowed inside the stability window of provisional
+        elbow estimates for ``"auto_elbow_log_delta"``.
+
+    gcn_elbow_lookahead: int (optional, default 2)
+        Additional number of iterations to run after the stabilized elbow before stopping
+        in ``"auto_elbow_log_delta"``. This is an online approximation, not an exact post-hoc elbow.
        
     """
 
@@ -1543,7 +2006,18 @@ class FeatureMAP(BaseEstimator):
         disconnection_distance=None,
         output_variation=False,
         threshold=0.9,
-        gcn_iterations=None
+        gcn_iterations=None,
+        gcn_max_iterations=None,
+        gcn_align_top_k=None,
+        collect_variation_pc_steps=False,
+        gcn_stop_mode="auto_delta_patience",
+        gcn_stop_delta_tol=0.08,
+        gcn_stop_rw_tol=None,
+        gcn_stop_patience=2,
+        gcn_elbow_min_steps=14,
+        gcn_elbow_stability=4,
+        gcn_elbow_tolerance_steps=1,
+        gcn_elbow_lookahead=2,
         # original_data_flag=True,
         # pca_vh=None
     ):
@@ -1584,6 +2058,17 @@ class FeatureMAP(BaseEstimator):
         self.output_variation = output_variation
         self.threshold = threshold
         self.gcn_iterations = gcn_iterations
+        self.gcn_max_iterations = gcn_max_iterations
+        self.gcn_align_top_k = gcn_align_top_k
+        self.collect_variation_pc_steps = collect_variation_pc_steps
+        self.gcn_stop_mode = gcn_stop_mode
+        self.gcn_stop_delta_tol = gcn_stop_delta_tol
+        self.gcn_stop_rw_tol = gcn_stop_rw_tol
+        self.gcn_stop_patience = gcn_stop_patience
+        self.gcn_elbow_min_steps = gcn_elbow_min_steps
+        self.gcn_elbow_stability = gcn_elbow_stability
+        self.gcn_elbow_tolerance_steps = gcn_elbow_tolerance_steps
+        self.gcn_elbow_lookahead = gcn_elbow_lookahead
         # self.original_data_flag = original_data_flag,
         # self.pca_vh = pca_vh
         
@@ -1777,6 +2262,73 @@ class FeatureMAP(BaseEstimator):
             raise ValueError("feat_gauge_coefficient cannot be negative")
         if self.feat_var_shift < 0.0:
             raise ValueError("feat_var_shift cannot be negative")
+        if self.gcn_iterations is not None:
+            warn(
+                "`gcn_iterations` is deprecated and now acts as `gcn_max_iterations`; "
+                "FeatureMAP always auto-stops graph smoothing.",
+                UserWarning,
+            )
+            if self.gcn_max_iterations is None:
+                self.gcn_max_iterations = self.gcn_iterations
+        if self.gcn_max_iterations is not None:
+            if not isinstance(self.gcn_max_iterations, (int, np.integer)):
+                raise ValueError("gcn_max_iterations must be a positive integer or None")
+            if int(self.gcn_max_iterations) < 1:
+                raise ValueError("gcn_max_iterations must be greater than 0")
+            self.gcn_max_iterations = int(self.gcn_max_iterations)
+        if self.gcn_align_top_k is not None:
+            if not isinstance(self.gcn_align_top_k, (int, np.integer)):
+                raise ValueError("gcn_align_top_k must be a nonnegative integer or None")
+            if int(self.gcn_align_top_k) < 0:
+                raise ValueError("gcn_align_top_k cannot be negative")
+            self.gcn_align_top_k = int(self.gcn_align_top_k)
+        if self.gcn_stop_mode == "auto_hybrid_rw":
+            warn(
+                "`auto_hybrid_rw` is deprecated; use `auto_delta_patience` instead.",
+                UserWarning,
+            )
+            self.gcn_stop_mode = "auto_delta_patience"
+        if self.gcn_stop_mode not in ("auto_delta_patience", "auto_elbow_log_delta"):
+            raise ValueError(
+                'gcn_stop_mode must be "auto_delta_patience" or "auto_elbow_log_delta"'
+            )
+        if self.gcn_stop_delta_tol < 0.0:
+            raise ValueError("gcn_stop_delta_tol cannot be negative")
+        if self.gcn_stop_rw_tol is not None:
+            if not isinstance(self.gcn_stop_rw_tol, (int, float, np.integer, np.floating)):
+                raise ValueError("gcn_stop_rw_tol must be a nonnegative number or None")
+            if float(self.gcn_stop_rw_tol) < 0.0:
+                raise ValueError("gcn_stop_rw_tol cannot be negative")
+            warn(
+                "`gcn_stop_rw_tol` is deprecated and ignored; graph smoothing no longer uses rw in stopping.",
+                UserWarning,
+            )
+            self.gcn_stop_rw_tol = None
+        if not isinstance(self.gcn_stop_patience, (int, np.integer)):
+            raise ValueError("gcn_stop_patience must be a positive integer")
+        if int(self.gcn_stop_patience) < 1:
+            raise ValueError("gcn_stop_patience must be greater than 0")
+        self.gcn_stop_patience = int(self.gcn_stop_patience)
+        if not isinstance(self.gcn_elbow_min_steps, (int, np.integer)):
+            raise ValueError("gcn_elbow_min_steps must be a positive integer")
+        if int(self.gcn_elbow_min_steps) < 1:
+            raise ValueError("gcn_elbow_min_steps must be greater than 0")
+        self.gcn_elbow_min_steps = int(self.gcn_elbow_min_steps)
+        if not isinstance(self.gcn_elbow_stability, (int, np.integer)):
+            raise ValueError("gcn_elbow_stability must be a positive integer")
+        if int(self.gcn_elbow_stability) < 1:
+            raise ValueError("gcn_elbow_stability must be greater than 0")
+        self.gcn_elbow_stability = int(self.gcn_elbow_stability)
+        if not isinstance(self.gcn_elbow_tolerance_steps, (int, np.integer)):
+            raise ValueError("gcn_elbow_tolerance_steps must be a nonnegative integer")
+        if int(self.gcn_elbow_tolerance_steps) < 0:
+            raise ValueError("gcn_elbow_tolerance_steps cannot be negative")
+        self.gcn_elbow_tolerance_steps = int(self.gcn_elbow_tolerance_steps)
+        if not isinstance(self.gcn_elbow_lookahead, (int, np.integer)):
+            raise ValueError("gcn_elbow_lookahead must be a nonnegative integer")
+        if int(self.gcn_elbow_lookahead) < 0:
+            raise ValueError("gcn_elbow_lookahead cannot be negative")
+        self.gcn_elbow_lookahead = int(self.gcn_elbow_lookahead)
 
         self._featuremap_kwds = {
             "lambda": self.feat_lambda, #if self.featuremap else 0.0,
@@ -1793,8 +2345,17 @@ class FeatureMAP(BaseEstimator):
             "verbose": self.verbose,
             "n_epochs": self.n_epochs,
             "threshold": self.threshold,   
-            'gcn_iterations': self.gcn_iterations,
-            
+            "gcn_iterations": self.gcn_max_iterations,
+            "gcn_max_iterations": self.gcn_max_iterations,
+            "gcn_align_top_k": self.gcn_align_top_k,
+            "collect_variation_pc_steps": self.collect_variation_pc_steps,
+            "gcn_stop_mode": self.gcn_stop_mode,
+            "gcn_stop_delta_tol": self.gcn_stop_delta_tol,
+            "gcn_stop_patience": self.gcn_stop_patience,
+            "gcn_elbow_min_steps": self.gcn_elbow_min_steps,
+            "gcn_elbow_stability": self.gcn_elbow_stability,
+            "gcn_elbow_tolerance_steps": self.gcn_elbow_tolerance_steps,
+            "gcn_elbow_lookahead": self.gcn_elbow_lookahead,
         }
         # if self.output_variation:
         #     self._featuremap_kwds['threshold'] = self.threshold
