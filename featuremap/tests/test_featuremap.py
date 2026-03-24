@@ -319,9 +319,9 @@ def test_featuremap_auto_elbow_log_delta_collects_consistent_variation_steps(sam
     )
 
 
-def test_featuremap_default_gcn_align_top_k_defaults_to_two(sample_data):
+def test_featuremap_default_gcn_align_top_k_tracks_n_components(sample_data):
     featuremap = FeatureMAP(
-        n_components=2,
+        n_components=3,
         n_neighbors=5,
         random_state=42,
         output_variation=True,
@@ -331,23 +331,23 @@ def test_featuremap_default_gcn_align_top_k_defaults_to_two(sample_data):
 
     kwds = featuremap._featuremap_kwds
 
-    assert int(kwds["gcn_align_top_k"]) == min(2, int(kwds["VH"].shape[1]))
+    assert int(kwds["gcn_align_top_k"]) == min(3, int(kwds["VH"].shape[1]))
 
 
 def test_featuremap_explicit_gcn_align_top_k_override_wins(sample_data):
     featuremap = FeatureMAP(
-        n_components=2,
+        n_components=3,
         n_neighbors=5,
         random_state=42,
         output_variation=True,
-        gcn_align_top_k=2,
+        gcn_align_top_k=1,
         gcn_max_iterations=2,
     )
     featuremap.fit_transform(sample_data)
 
     kwds = featuremap._featuremap_kwds
 
-    assert int(kwds["gcn_align_top_k"]) == min(2, int(kwds["VH"].shape[1]))
+    assert int(kwds["gcn_align_top_k"]) == min(1, int(kwds["VH"].shape[1]))
 
 
 def test_graph_convolution_fast_aligned_matches_legacy_small_case():
