@@ -252,6 +252,50 @@ def test_featuremap_gcn_stop_rw_tol_warns_and_is_ignored(sample_data):
     assert "gcn_stop_rw_residual" not in kwds
 
 
+def test_featuremap_gcn_iterations_runs_exact_steps(sample_data):
+    featuremap = FeatureMAP(
+        n_components=2,
+        n_neighbors=5,
+        random_state=42,
+        output_variation=True,
+        collect_variation_pc_steps=True,
+        gcn_iterations=4,
+        gcn_stop_mode="auto_delta_patience",
+        gcn_stop_delta_tol=10.0,
+        gcn_stop_patience=1,
+    )
+    featuremap.fit_transform(sample_data)
+
+    kwds = featuremap._featuremap_kwds
+
+    assert int(kwds["gcn_chosen_iteration"]) == 4
+    assert kwds["gcn_stop_reason"] == "fixed_iterations"
+    assert int(kwds["gcn_iterations_used"]) == 4
+    assert kwds["gcn_max_iterations_used"] is None
+    assert kwds["variation_pc_steps"].shape[0] == 5
+    assert np.any(kwds["gcn_stop_eligible"])
+
+
+def test_featuremap_gcn_iterations_overrides_gcn_max_iterations_with_warning(sample_data):
+    featuremap = FeatureMAP(
+        n_components=2,
+        n_neighbors=5,
+        random_state=42,
+        output_variation=True,
+        collect_variation_pc_steps=True,
+        gcn_iterations=3,
+        gcn_max_iterations=2,
+    )
+    with pytest.warns(UserWarning, match="gcn_max_iterations"):
+        featuremap.fit_transform(sample_data)
+
+    kwds = featuremap._featuremap_kwds
+
+    assert int(kwds["gcn_chosen_iteration"]) == 3
+    assert kwds["gcn_stop_reason"] == "fixed_iterations"
+    assert int(kwds["gcn_iterations_used"]) == 3
+
+
 def test_featuremap_auto_elbow_log_delta_collects_consistent_variation_steps(sample_data):
     featuremap = FeatureMAP(
         n_components=2,
@@ -275,7 +319,7 @@ def test_featuremap_auto_elbow_log_delta_collects_consistent_variation_steps(sam
     )
 
 
-def test_featuremap_default_gcn_align_top_k_tracks_variation_pc_k(sample_data):
+def test_featuremap_default_gcn_align_top_k_defaults_to_two(sample_data):
     featuremap = FeatureMAP(
         n_components=2,
         n_neighbors=5,
@@ -287,10 +331,7 @@ def test_featuremap_default_gcn_align_top_k_tracks_variation_pc_k(sample_data):
 
     kwds = featuremap._featuremap_kwds
 
-    assert int(kwds["gcn_align_top_k"]) == min(
-        int(kwds["variation_pc_k"]),
-        int(kwds["VH"].shape[1]),
-    )
+    assert int(kwds["gcn_align_top_k"]) == min(2, int(kwds["VH"].shape[1]))
 
 
 def test_featuremap_explicit_gcn_align_top_k_override_wins(sample_data):

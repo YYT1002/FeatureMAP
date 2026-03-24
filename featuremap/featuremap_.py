@@ -762,9 +762,9 @@ def tangent_space_approximation(
     knn_index = knn_index
     gauge_vh = np.array(gauge_vh)
 
+    fixed_gcn_iterations = featuremap_kwds.get("gcn_iterations")
+    use_fixed_gcn_iterations = fixed_gcn_iterations is not None
     gcn_max_iterations = featuremap_kwds.get("gcn_max_iterations")
-    if gcn_max_iterations is None:
-        gcn_max_iterations = featuremap_kwds.get("gcn_iterations")
     threshold = featuremap_kwds["threshold"]
     collect_variation_pc_steps = bool(featuremap_kwds.get("collect_variation_pc_steps", False))
     gcn_stop_mode = featuremap_kwds.get("gcn_stop_mode", "auto_delta_patience")
@@ -777,11 +777,16 @@ def tangent_space_approximation(
     gcn_elbow_tolerance_steps = int(featuremap_kwds.get("gcn_elbow_tolerance_steps", 1))
     gcn_elbow_lookahead = int(featuremap_kwds.get("gcn_elbow_lookahead", 2))
 
-    if gcn_max_iterations is None:
+    if use_fixed_gcn_iterations:
+        num_iterations = max(int(fixed_gcn_iterations), 1)
+    elif gcn_max_iterations is None:
         num_iterations = None
     else:
         num_iterations = max(int(gcn_max_iterations), 1)
-    featuremap_kwds["gcn_max_iterations_used"] = None if num_iterations is None else int(num_iterations)
+    featuremap_kwds["gcn_iterations_used"] = int(num_iterations) if use_fixed_gcn_iterations else None
+    featuremap_kwds["gcn_max_iterations_used"] = (
+        None if use_fixed_gcn_iterations or num_iterations is None else int(num_iterations)
+    )
 
     variation_pc_k = featuremap_kwds.get("variation_pc_k")
     variation_pc_intrinsic_dim = featuremap_kwds.get("variation_pc_intrinsic_dim")
@@ -844,7 +849,7 @@ def tangent_space_approximation(
             eligible = relative_change <= gcn_stop_delta_tol
             consecutive_eligible = consecutive_eligible + 1 if eligible else 0
             should_stop = eligible and consecutive_eligible >= gcn_stop_patience
-            if should_stop and featuremap_kwds["verbose"]:
+            if should_stop and not use_fixed_gcn_iterations and featuremap_kwds["verbose"]:
                 print(
                     ts()
                     + " Auto-stopping graph convolution at iteration "
@@ -864,7 +869,7 @@ def tangent_space_approximation(
             )
             consecutive_eligible = 0
             should_stop = bool(eligible)
-            if should_stop and featuremap_kwds["verbose"]:
+            if should_stop and not use_fixed_gcn_iterations and featuremap_kwds["verbose"]:
                 print(
                     ts()
                     + " Auto-stopping graph convolution at iteration "
@@ -882,11 +887,13 @@ def tangent_space_approximation(
         gcn_stop_elbow_candidate_step.append(int(elbow_candidate_step))
         gcn_stop_elbow_stable.append(bool(elbow_stable))
         previous_variation_pc = variation_pc_step
+        if use_fixed_gcn_iterations:
+            return False
         return should_stop
 
     raw_align_top_k = featuremap_kwds.get("gcn_align_top_k")
     if raw_align_top_k is None:
-        align_top_k = int(variation_pc_k)
+        align_top_k = 2
     else:
         align_top_k = int(raw_align_top_k)
     align_top_k = max(0, min(align_top_k, gauge_vh.shape[1]))
@@ -919,9 +926,12 @@ def tangent_space_approximation(
         gcn_stop_elbow_stable, dtype=bool
     )
     featuremap_kwds["gcn_chosen_iteration"] = int(gcn_results.get("completed_iterations", 0))
-    featuremap_kwds["gcn_stop_reason"] = (
-        "auto_converged" if gcn_results.get("stopped_early", False) else "max_iterations"
-    )
+    if use_fixed_gcn_iterations:
+        featuremap_kwds["gcn_stop_reason"] = "fixed_iterations"
+    else:
+        featuremap_kwds["gcn_stop_reason"] = (
+            "auto_converged" if gcn_results.get("stopped_early", False) else "max_iterations"
+        )
     if collect_variation_pc_steps:
         featuremap_kwds["variation_pc_steps"] = np.stack(variation_pc_steps, axis=0).astype(
             np.float32, copy=False
@@ -1924,16 +1934,16 @@ class FeatureMAP(BaseEstimator):
         by the number of principal components that accumulates 90% of the variance of the data.
 
     gcn_iterations: int or None (optional, default None)
-        Deprecated alias for ``gcn_max_iterations``. FeatureMAP now always auto-stops graph smoothing and this
-        value is treated as an upper bound rather than an exact number of iterations.
+        Exact number of graph-convolution iterations to run. If provided, FeatureMAP records auto-stop
+        diagnostics but does not stop early.
 
     gcn_max_iterations: int or None (optional, default None)
         Hard cap for graph-convolution iterations before the auto-stop rule gives up and returns the current state.
         If None, graph smoothing runs without a preset cap and stops only when the auto-stop rule triggers.
 
-    gcn_align_top_k: int or None (optional, default None)
+    gcn_align_top_k: int or None (optional, default 2)
         Number of leading tangent-frame rows to align before graph averaging. If None, FeatureMAP uses
-        ``variation_pc_k`` as the default alignment rank.
+        2 as the default alignment rank.
 
     gcn_stop_mode: str (optional, default "auto_delta_patience")
         Auto-stop policy for graph smoothing. ``"auto_delta_patience"`` uses only the delta threshold plus
@@ -2008,7 +2018,7 @@ class FeatureMAP(BaseEstimator):
         threshold=0.9,
         gcn_iterations=None,
         gcn_max_iterations=None,
-        gcn_align_top_k=None,
+        gcn_align_top_k=2,
         collect_variation_pc_steps=False,
         gcn_stop_mode="auto_delta_patience",
         gcn_stop_delta_tol=0.08,
@@ -2263,13 +2273,17 @@ class FeatureMAP(BaseEstimator):
         if self.feat_var_shift < 0.0:
             raise ValueError("feat_var_shift cannot be negative")
         if self.gcn_iterations is not None:
-            warn(
-                "`gcn_iterations` is deprecated and now acts as `gcn_max_iterations`; "
-                "FeatureMAP always auto-stops graph smoothing.",
-                UserWarning,
-            )
-            if self.gcn_max_iterations is None:
-                self.gcn_max_iterations = self.gcn_iterations
+            if not isinstance(self.gcn_iterations, (int, np.integer)):
+                raise ValueError("gcn_iterations must be a positive integer or None")
+            if int(self.gcn_iterations) < 1:
+                raise ValueError("gcn_iterations must be greater than 0")
+            self.gcn_iterations = int(self.gcn_iterations)
+            if self.gcn_max_iterations is not None:
+                warn(
+                    "`gcn_max_iterations` is ignored when `gcn_iterations` is provided, "
+                    "because `gcn_iterations` now means an exact fixed step count.",
+                    UserWarning,
+                )
         if self.gcn_max_iterations is not None:
             if not isinstance(self.gcn_max_iterations, (int, np.integer)):
                 raise ValueError("gcn_max_iterations must be a positive integer or None")
@@ -2345,7 +2359,7 @@ class FeatureMAP(BaseEstimator):
             "verbose": self.verbose,
             "n_epochs": self.n_epochs,
             "threshold": self.threshold,   
-            "gcn_iterations": self.gcn_max_iterations,
+            "gcn_iterations": self.gcn_iterations,
             "gcn_max_iterations": self.gcn_max_iterations,
             "gcn_align_top_k": self.gcn_align_top_k,
             "collect_variation_pc_steps": self.collect_variation_pc_steps,
