@@ -893,7 +893,7 @@ def tangent_space_approximation(
 
     raw_align_top_k = featuremap_kwds.get("gcn_align_top_k")
     if raw_align_top_k is None:
-        align_top_k = 2
+        align_top_k = int(featuremap_kwds["n_components"])
     else:
         align_top_k = int(raw_align_top_k)
     align_top_k = max(0, min(align_top_k, gauge_vh.shape[1]))
@@ -1941,9 +1941,9 @@ class FeatureMAP(BaseEstimator):
         Hard cap for graph-convolution iterations before the auto-stop rule gives up and returns the current state.
         If None, graph smoothing runs without a preset cap and stops only when the auto-stop rule triggers.
 
-    gcn_align_top_k: int or None (optional, default 2)
+    gcn_align_top_k: int or None (optional, default None)
         Number of leading tangent-frame rows to align before graph averaging. If None, FeatureMAP uses
-        2 as the default alignment rank.
+        the embedding dimension ``n_components`` as the default alignment rank.
 
     gcn_stop_mode: str (optional, default "auto_delta_patience")
         Auto-stop policy for graph smoothing. ``"auto_delta_patience"`` uses only the delta threshold plus
@@ -2018,7 +2018,7 @@ class FeatureMAP(BaseEstimator):
         threshold=0.9,
         gcn_iterations=None,
         gcn_max_iterations=None,
-        gcn_align_top_k=2,
+        gcn_align_top_k=None,
         collect_variation_pc_steps=False,
         gcn_stop_mode="auto_delta_patience",
         gcn_stop_delta_tol=0.08,
