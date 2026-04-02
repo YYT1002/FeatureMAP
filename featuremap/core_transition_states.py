@@ -844,7 +844,7 @@ def compute_betweenness_centrality(adata, emb_featuremap, quantile_trans=0.8, qu
     # graph =emb_featuremap.graph_
 
     # create a graph from the adjacency matrix
-    G = nx.from_numpy_matrix(graph)
+    G = nx.from_numpy_array(graph)
     # graph size of G
     n = G.number_of_nodes()
 
@@ -1238,11 +1238,11 @@ from scipy.stats import f_oneway
 
 def compute_and_plot_clustering_coefficients(adata, emb_featuremap, emb_featuremap_v, phate_graph_nx, tsne_graph, densmap_graph):
 
-    G_expr = nx.from_numpy_matrix(emb_featuremap.graph_)
-    G_var = nx.from_numpy_matrix(emb_featuremap_v._featuremap_kwds['graph_v'])
+    G_expr = nx.from_numpy_array(emb_featuremap.graph_)
+    G_var = nx.from_numpy_array(emb_featuremap_v._featuremap_kwds['graph_v'])
     G_phate = phate_graph_nx
-    G_tsne = nx.from_numpy_matrix(tsne_graph)
-    G_densmap = nx.from_numpy_matrix(densmap_graph)
+    G_tsne = nx.from_numpy_array(tsne_graph)
+    G_densmap = nx.from_numpy_array(densmap_graph)
 
     clusters = adata.obs['leiden_v'].values.tolist()
     sc.pl.embedding(adata, basis='X_featmap_v', color='leiden_v', legend_loc='on data')
@@ -1363,11 +1363,11 @@ def compute_and_plot_silhouette_scores(adata, emb_featuremap, emb_featuremap_v, 
     sc.pl.embedding(adata, basis='X_featmap_v', color='leiden_v', cmap='Blues_r', s=10, legend_loc='on data', title='Leiden_v clustering')
 
     # Graph distance matrices   
-    G_expr = nx.from_numpy_matrix(emb_featuremap.graph_)
-    G_var = nx.from_numpy_matrix(emb_featuremap_v._featuremap_kwds['graph_v'])
+    G_expr = nx.from_numpy_array(emb_featuremap.graph_)
+    G_var = nx.from_numpy_array(emb_featuremap_v._featuremap_kwds['graph_v'])
     G_phate = phate_graph_nx 
-    G_tsne = nx.from_numpy_matrix(tsne_graph)
-    G_densmap = nx.from_numpy_matrix(densmap_graph)
+    G_tsne = nx.from_numpy_array(tsne_graph)
+    G_densmap = nx.from_numpy_array(densmap_graph)
 
     # Get the weighted adjacency matrix
     adjacency_expr = nx.to_numpy_array(G_expr)
