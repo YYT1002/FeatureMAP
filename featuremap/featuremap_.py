@@ -770,7 +770,7 @@ def tangent_space_approximation(
     gcn_stop_mode = featuremap_kwds.get("gcn_stop_mode", "auto_delta_patience")
     if gcn_stop_mode == "auto_hybrid_rw":
         gcn_stop_mode = "auto_delta_patience"
-    gcn_stop_delta_tol = float(featuremap_kwds.get("gcn_stop_delta_tol", 0.08))
+    gcn_stop_delta_tol = float(featuremap_kwds.get("gcn_stop_delta_tol", 0.01))
     gcn_stop_patience = int(featuremap_kwds.get("gcn_stop_patience", 2))
     gcn_elbow_min_steps = int(featuremap_kwds.get("gcn_elbow_min_steps", 14))
     gcn_elbow_stability = int(featuremap_kwds.get("gcn_elbow_stability", 4))
@@ -1949,7 +1949,7 @@ class FeatureMAP(BaseEstimator):
         Auto-stop policy for graph smoothing. ``"auto_delta_patience"`` uses only the delta threshold plus
         patience, while ``"auto_elbow_log_delta"`` uses the online log-elbow of the delta curve.
 
-    gcn_stop_delta_tol: float (optional, default 0.08)
+    gcn_stop_delta_tol: float (optional, default 0.01)
         Relative Frobenius-norm tolerance on consecutive ``variation_pc`` updates for the
         ``"auto_delta_patience"`` stop mode.
 
@@ -2021,7 +2021,7 @@ class FeatureMAP(BaseEstimator):
         gcn_align_top_k=None,
         collect_variation_pc_steps=False,
         gcn_stop_mode="auto_delta_patience",
-        gcn_stop_delta_tol=0.08,
+        gcn_stop_delta_tol=0.01,
         gcn_stop_rw_tol=None,
         gcn_stop_patience=2,
         gcn_elbow_min_steps=14,
