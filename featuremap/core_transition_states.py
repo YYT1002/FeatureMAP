@@ -158,7 +158,7 @@ def compute_density(
         # Clusters by leiden
         import scanpy as sc
         sc.pp.neighbors(adata, n_neighbors=30,)
-        sc.tl.leiden(adata, resolution=0.5)
+        sc.tl.leiden(adata, resolution=0.1)
 
     partition_label = adata.obs[cluster_key].copy()
     partition_label.value_counts()
@@ -301,7 +301,7 @@ def compute_density_0(
         # Clusters by leiden
         import scanpy as sc
         sc.pp.neighbors(adata, n_neighbors=30,)
-        sc.tl.leiden(adata, resolution=0.5)
+        sc.tl.leiden(adata, resolution=0.1)
 
     partition_label = adata.obs[cluster_key].copy()
     partition_label.value_counts()
