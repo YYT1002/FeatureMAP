@@ -319,6 +319,41 @@ def test_featuremap_auto_elbow_log_delta_collects_consistent_variation_steps(sam
     )
 
 
+def test_featuremap_k_dim_gex_embedding_shape():
+    """k-dim gex embedding should produce VH_embedding of shape (n, k, k)
+    and run the gex optimization without indexing errors when n_components > 2."""
+    X, _ = make_classification(
+        n_samples=120,
+        n_features=20,
+        n_informative=10,
+        n_redundant=2,
+        random_state=0,
+    )
+    k = 3
+    featuremap = FeatureMAP(
+        n_components=k,
+        n_neighbors=10,
+        random_state=42,
+        feat_lambda=0.1,
+        feat_frac=0.2,
+        gcn_max_iterations=2,
+        threshold=0.99,
+    )
+    X_transformed = featuremap.fit_transform(X)
+
+    assert X_transformed.shape == (X.shape[0], k)
+
+    kwds = featuremap._featuremap_kwds
+    assert kwds["VH_embedding"].shape == (X.shape[0], k, k)
+    # Each frame row should be unit-normalized.
+    row_norms = np.linalg.norm(kwds["VH_embedding"], axis=2)
+    assert np.allclose(row_norms, 1.0, atol=1e-5)
+    # Per-PC embeddings should be exposed under both legacy and indexed keys.
+    assert kwds["gauge_v1_emb"].shape == (X.shape[0], k)
+    assert kwds["gauge_v2_emb"].shape == (X.shape[0], k)
+    assert kwds["gauge_v3_emb"].shape == (X.shape[0], k)
+
+
 def test_featuremap_default_gcn_align_top_k_tracks_n_components(sample_data):
     featuremap = FeatureMAP(
         n_components=3,

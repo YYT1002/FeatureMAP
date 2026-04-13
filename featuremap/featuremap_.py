@@ -802,6 +802,31 @@ def tangent_space_approximation(
             variation_pc_intrinsic_dim, dtype=np.int32
         ).copy()
 
+    # The k-dimensional gauge embedding requires at least k local PC directions
+    # at every point. Hard-fail if we don't have k PCs available; warn (but
+    # proceed) when k reaches or exceeds the median local intrinsic dim, since
+    # in that regime the high-index PCs the gex objective relies on are mostly
+    # noise.
+    n_components_requested = int(featuremap_kwds["n_components"])
+    if n_components_requested > gauge_vh.shape[1]:
+        raise ValueError(
+            f"n_components={n_components_requested} exceeds the number of "
+            f"available local PC directions ({gauge_vh.shape[1]}); reduce "
+            f"n_components or increase feat_gauge_coefficient/n_neighbors so "
+            f"the local SVD yields more PCs"
+        )
+    median_intrinsic_dim = int(
+        np.median(featuremap_kwds["variation_pc_intrinsic_dim"])
+    )
+    if n_components_requested >= median_intrinsic_dim:
+        warn(
+            f"n_components={n_components_requested} is not strictly less than "
+            f"the median local intrinsic dimension ({median_intrinsic_dim}); "
+            "the k-dimensional gauge embedding may rely on PC directions that "
+            "are dominated by noise at most points.",
+            UserWarning,
+        )
+
     variation_pc_step0, _, _ = _compute_variation_pc(
         gauge_vh,
         featuremap_kwds["Singular_value"],
@@ -1121,146 +1146,75 @@ def recover_gauge_from_embedding(
 
 def tangent_space_embedding(
         featuremap_kwds,
-        ):    
+        ):
     """
-    Embedding the gauge (rotation matrix) to low dim space
+    Embed each of the top-k tangent-space PC frames into k-dimensional space.
+
+    For ``k = featuremap_kwds["n_components"]`` and the smoothed local frames
+    ``vh_smoothed`` of shape ``(n_samples, d_pc, n_features)``, this runs one
+    UMAP per PC index ``c in [0, k)`` over the feature-space vectors
+    ``vh_smoothed[:, c, :]``, producing a ``(n_samples, k)`` embedding for each.
+    The k normalized embeddings are stacked into ``VH_embedding`` of shape
+    ``(n_samples, k, k)``: row ``c`` of frame ``i`` is the embedding-space
+    direction corresponding to the c-th local PC at point ``i``.
 
     Parameters
     ----------
     featuremap_kwds: dict
-        Key word arguments to be used by the FeatureMAP optimization.  
+        Key word arguments used by the FeatureMAP optimization. Must contain
+        ``vh_smoothed``, ``n_components``, ``n_neighbors``, ``random_state``,
+        ``metric``, ``min_dist`` and ``n_epochs``.
     """
-    
-    ################################################################################
-    # Embedding the gauge (rotation matrix) to low dim space
-    # Consider the distance within topological structure of KNN network
-    ###############################################################################
+
     random_state = featuremap_kwds["random_state"]
     n_neighbors = featuremap_kwds["n_neighbors"]
     metric = featuremap_kwds["metric"]
     min_dist = featuremap_kwds["min_dist"]
     n_epochs = featuremap_kwds["n_epochs"]
+    k = int(featuremap_kwds["n_components"])
 
-    gauge_vh = featuremap_kwds["vh_smoothed"]
-    gauge_vh_copy = np.array(gauge_vh, copy=True)
+    gauge_vh = np.array(featuremap_kwds["vh_smoothed"], copy=True)
+    n_samples, n_pc_avail, _ = gauge_vh.shape
 
+    if k > n_pc_avail:
+        raise ValueError(
+            f"n_components={k} exceeds the number of available local PC "
+            f"directions ({n_pc_avail}); reduce n_components or increase "
+            f"feat_gauge_coefficient/n_neighbors so the local SVD yields more PCs"
+        )
 
-    # First largest PC
-    # T1 = time.time()
-    rotation_matrix = gauge_vh_copy[:,0,:]
-    
-    # from sklearn.decomposition import TruncatedSVD
-    from sklearn.decomposition import PCA
-    pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
-    X_pca = pca.fit_transform(rotation_matrix)
-    
     import umap
-    # print('random_state', random_state)
-    umap_embedding = umap.UMAP(n_neighbors=n_neighbors,random_state=random_state, metric=metric,min_dist=min_dist, n_epochs=n_epochs).fit_transform(X=X_pca)
-    # umap_embedding = umap.UMAP(n_neighbors=30, metric='euclidean',min_dist=0.5).fit_transform(X=X_pca)
-    featuremap_kwds['gauge_v1_emb'] = umap_embedding
-    # T2 = time.time()
-    # print(f'UMAP time is {T2-T1}')
-    
-    umap_embedding_norm = np.linalg.norm(umap_embedding, axis=1, keepdims=True)
-    umap_embedding_norm[umap_embedding_norm == 0.0] = 1.0
+    from sklearn.decomposition import PCA
 
-    # gauge_vh_embedding is embedding of VH
-    gauge_vh_mean_embedding = np.zeros([umap_embedding.shape[0], umap_embedding.shape[1], 2])
-    normalized_embedding = umap_embedding / umap_embedding_norm
-    gauge_vh_mean_embedding[:, 0, 0] = normalized_embedding[:, 0]
-    gauge_vh_mean_embedding[:, 0, 1] = normalized_embedding[:, 1]
-    
-    
-    # Second largest PC
-    rotation_matrix = gauge_vh_copy[:,1,:]
-    pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
-    X_pca = pca.fit_transform(rotation_matrix)
-    
-    
-    umap_embedding = umap.UMAP(n_neighbors=n_neighbors,random_state=random_state, metric=metric,min_dist=min_dist, n_epochs=n_epochs).fit_transform(X=X_pca)
-    # umap_embedding = umap.UMAP(n_neighbors=30,  metric='euclidean',min_dist=0.5).fit_transform(X=X_pca)
-    featuremap_kwds['gauge_v2_emb'] = umap_embedding
-    
-    umap_embedding_norm = np.linalg.norm(umap_embedding, axis=1, keepdims=True)
-    umap_embedding_norm[umap_embedding_norm == 0.0] = 1.0
+    VH_embedding = np.zeros((n_samples, k, k), dtype=np.float32)
 
-    normalized_embedding = umap_embedding / umap_embedding_norm
+    for c in range(k):
+        rotation_matrix = gauge_vh[:, c, :]
+        pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
+        X_pca = pca.fit_transform(rotation_matrix)
 
-    # gauge_vh_embedding is embedding of VH
-    gauge_vh_mean_embedding[:, 1, 0] = normalized_embedding[:, 0]
-    gauge_vh_mean_embedding[:, 1, 1] = normalized_embedding[:, 1]
+        umap_embedding = umap.UMAP(
+            n_components=k,
+            n_neighbors=n_neighbors,
+            random_state=random_state,
+            metric=metric,
+            min_dist=min_dist,
+            n_epochs=n_epochs,
+        ).fit_transform(X=X_pca)
 
-    featuremap_kwds["VH_embedding"] = np.array(gauge_vh_mean_embedding).astype(np.float32, copy=True) # VH_embedding after average
-  
-      
-    # # First largest PC
-    # # T1 = time.time()
-    # gauge_vh_copy = gauge_vh.copy()
-    # rotation_matrix = np.array(gauge_vh_copy)[:,0,:]
-    
-    # # from sklearn.decomposition import TruncatedSVD
-    # from sklearn.decomposition import PCA
-    # pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
-    # X_pca = pca.fit_transform(rotation_matrix)
+        # Backward-compat: surface the first two raw per-PC embeddings under
+        # the legacy keys consumed by feature plotting helpers.
+        if c == 0:
+            featuremap_kwds["gauge_v1_emb"] = umap_embedding.astype(np.float32, copy=False)
+        elif c == 1:
+            featuremap_kwds["gauge_v2_emb"] = umap_embedding.astype(np.float32, copy=False)
+        featuremap_kwds[f"gauge_v{c + 1}_emb"] = umap_embedding.astype(np.float32, copy=False)
 
-    # # Spectral embedding
-    # graph, _, _ = fuzzy_simplicial_set(
-    #                 X_pca,
-    #                 n_neighbors,
-    #                 random_state,
-    #                 metric,
-    #                 )
+        norm = np.linalg.norm(umap_embedding, axis=1, keepdims=True)
+        norm[norm == 0.0] = 1.0
+        VH_embedding[:, c, :] = (umap_embedding / norm).astype(np.float32, copy=False)
 
-    # spectral_embedding = spectral_layout(
-    #         X_pca,
-    #         graph,
-    #         dim=2,
-    #         random_state=random_state,
-    #         metric=metric,
-    #     )
-    
-    # featuremap_kwds['gauge_v1_emb'] = spectral_embedding
-    # # T2 = time.time()
-    # # print(f'UMAP time is {T2-T1}')
-    
-    # spectral_embedding_norm = np.linalg.norm(spectral_embedding, axis=1)
-        
-    # # gauge_vh_embedding is embedding of VH
-    # gauge_vh_mean_embedding = np.zeros([spectral_embedding.shape[0], spectral_embedding.shape[1],2])
-    # gauge_vh_mean_embedding[:,0,0] = spectral_embedding[:, 0]/spectral_embedding_norm
-    # gauge_vh_mean_embedding[:,0,1] = spectral_embedding[:, 1]/spectral_embedding_norm
-    
-    
-    # # Second largest PC
-    # rotation_matrix = np.array(gauge_vh_copy)[:,1,:]
-    # pca = PCA(n_components=min(rotation_matrix.shape[1], 50))
-    # X_pca = pca.fit_transform(rotation_matrix)
-    
-    #  # Spectral embedding
-    # graph, _, _ = fuzzy_simplicial_set(
-    #                 X_pca,
-    #                 n_neighbors,
-    #                 random_state,
-    #                 metric,
-    #                 )
-
-    # spectral_embedding = spectral_layout(
-    #         X_pca,
-    #         graph,
-    #         dim=2,
-    #         random_state=random_state,
-    #         metric=metric,
-    #     )
-    # featuremap_kwds['gauge_v2_emb'] = spectral_embedding
-    
-    # spectral_embedding_norm = np.linalg.norm(spectral_embedding, axis=1)
-    
-    # # gauge_vh_embedding is embedding of VH
-    # gauge_vh_mean_embedding[:,1,0] = spectral_embedding[:, 0]/spectral_embedding_norm
-    # gauge_vh_mean_embedding[:,1,1] = spectral_embedding[:, 1]/spectral_embedding_norm
-
-    # featuremap_kwds["VH_embedding"] = np.array(gauge_vh_mean_embedding).astype(np.float32, copy=True) # VH_embedding after average
+    featuremap_kwds["VH_embedding"] = VH_embedding
   
    
 
@@ -1316,29 +1270,12 @@ def variation_embedding(
     
     ######################################
     # Variation embedding
-    ######################################## 
+    ########################################
     import umap
-    emb_variation = umap.UMAP(n_components=int(n_components), random_state=random_state, 
+    emb_variation = umap.UMAP(n_components=int(n_components), random_state=random_state,
                               n_neighbors=n_neighbors,metric=metric,min_dist=min_dist, spread=spread).fit(gene_var_norm)
     featuremap_kwds["variation_embedding"] = emb_variation.embedding_
     featuremap_kwds["graph_v"] = emb_variation.graph_
-    
-    featuremap_kwds['gauge_v1_emb'] = emb_variation.embedding_[:, :2]
-    # print(featuremap_kwds['gauge_v1_emb'].shape)
-    featuremap_kwds['gauge_v2_emb'] = emb_variation.embedding_[:,[1,0]]
-    featuremap_kwds['gauge_v2_emb'][:,0] = -featuremap_kwds['gauge_v2_emb'][:,0]
-
-    # normalze the gauge_v1_emb and gauge_v2_emb
-    gauge_v1_emb_norm = np.linalg.norm(featuremap_kwds['gauge_v1_emb'], axis=1, keepdims=True)
-    gauge_v2_emb_norm = np.linalg.norm(featuremap_kwds['gauge_v2_emb'], axis=1, keepdims=True)
-
-    gauge_v1_emb_norm[gauge_v1_emb_norm == 0.0] = 1.0
-    gauge_v2_emb_norm[gauge_v2_emb_norm == 0.0] = 1.0
-
-    featuremap_kwds['VH_embedding'] = np.stack((
-        featuremap_kwds['gauge_v1_emb'] / gauge_v1_emb_norm,
-        featuremap_kwds['gauge_v2_emb'] / gauge_v2_emb_norm
-    ), axis=1)
 
     return emb_variation.embedding_
 
@@ -1573,14 +1510,18 @@ def simplicial_set_embedding_with_tangent_space_embedding(
         if isinstance(init, str) and init == "variation":
             embedding = variation_emb
 
-        # Embedding the gauge (rotation matrix) to low dim space
+        # Embedding the gauge (rotation matrix) to low dim space.
+        # This produces VH_embedding of shape (n_samples, n_components, n_components)
+        # by independently embedding each of the top n_components local PC frames
+        # into n_components dimensions, which is what the optimizer indexes by
+        # `feat_VH_embedding[j][d]` for d in range(dim).
         if verbose:
             print(ts() + " Tangent space embedding")
-        # T1 = time.time()
-        # tangent_space_embedding(featuremap_kwds)
-        # T2 = time.time()
-        # if verbose:
-        #     print(ts() + f' Tangent_space_embedding time is {T2-T1}')
+        T1 = time.time()
+        tangent_space_embedding(featuremap_kwds)
+        T2 = time.time()
+        if verbose:
+            print(ts() + f' Tangent_space_embedding time is {T2-T1}')
 
 
         head = graph.row
