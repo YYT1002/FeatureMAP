@@ -78,7 +78,7 @@ More tutorials are at https://featuremap.readthedocs.io/en/latest/index.html.
 ## Citation
 Our FeatureMAP alogrithm is based on the paper
 
-Yang, Yang, et al. "Interpretable Dimensionality Reduction by Feature Preserving Manifold Approximation and Projection." arXiv preprint arXiv:2211.09321 (2022).
+Yang, Y., Gong, J., Sun, H. et al. Feature-preserving manifold approximation and projection to analyze single-cell data. Nat Comput Sci (2026). https://doi.org/10.1038/s43588-026-00970-6
 
 ## License
 The FeatureMAP package is under BSD-3-Clause license.
