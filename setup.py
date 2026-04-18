@@ -51,12 +51,14 @@ configuration = {
             "scanpy",
             "pandas",
             "anndata",
+            "leidenalg",
             "matplotlib >= 3.5.1"
         ],
          "core_transition_state": [
             "scanpy",
             "pandas",
             "anndata",
+            "leidenalg",
             "matplotlib >= 3.5.1"
         ],
     
