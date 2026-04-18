@@ -38,7 +38,7 @@ configuration = {
     'url' : 'https://github.com/YYT1002/FeatureMAP',
     'maintainer' : 'Yang Yang',
     'maintainer_email' : 'yangyangnwpu@gmail.com',
-    'license' : 'GPL',
+    'license' : 'BSD-3-Clause',
     'packages' : ['featuremap'],
     'install_requires': ['numpy >= 1.13',
                          'scikit-learn >= 0.16',
