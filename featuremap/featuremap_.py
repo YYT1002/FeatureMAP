@@ -2502,8 +2502,8 @@ class FeatureMAP(BaseEstimator):
                 )
             if not np.all(X.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
-            self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int)
-            self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
+            self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int32)
+            self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float64)
             for row_id in range(X.shape[0]):
                 # Find KNNs row-by-row
                 row_data = X[row_id].data
