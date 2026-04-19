@@ -1866,7 +1866,7 @@ class FeatureMAP(BaseEstimator):
         different from all the rest of your data.  The connected manifold assumption will make such points have perfect
         similarity to a random set of other points.  Too many such points will artificially connect your space.
     
-    output_variation: bool (optional, default True)
+    output_variation: bool (optional, default False)
         Whether to compute the variation embedding only. If set to True, the algorithm will compute the variation embedding
         only and return the embedding. If set to False, the algorithm will compute the Feature-augmented embedding.
     
