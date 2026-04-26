@@ -113,51 +113,6 @@ def _preprocess_data(X, min_samples=1000, random_state=42):
     # print(f'SVD decomposition time is {T2-T1}')
     return X, vh, n_original
 
-from sklearn.neighbors import NearestNeighbors
-def kernel_density_estimate(data, X, bw=0.5, min_radius=5, output_onlylogp=False, ):
-        """
-        Density estimation for data points specified by X with kernel density estimation.
-
-        Parameters
-        ----------
-        data : array of shape (n_samples, n_features)
-            2D array including data points. Input to density estimation.
-       
-        X : array
-            2D array including multiple data points. Input to density estimation.
-        output_onlylogp : bool
-            If true, returns logp, else returns p, g, h, msu.
-
-        Returns
-        -------
-        p : array
-            1D array.  Unnormalized probability density. The probability density
-            is not normalized due to numerical stability. Exact log probability
-        """
-        nbrs = NearestNeighbors(n_neighbors=min_radius + 1).fit(data)
-        adaptive_bw = np.maximum(nbrs.kneighbors(data)[0][:, -1], bw)
-
-        # the number of data points and the dimensionality
-        n, d = data.shape
-
-        from scipy.spatial.distance import cdist
-        # compare euclidean distances between each pair of data and X
-        D = cdist(data, X)
-        
-
-        # and evaluate the kernel at each distance
-        # prevent numerical overflow due to large exponentials
-        logc = -d * np.log(np.min(adaptive_bw)) - d / 2 * np.log(2 * np.pi)
-        C = (adaptive_bw[:, np.newaxis] / np.min(adaptive_bw)) ** (-d) * \
-            np.exp(-1 / 2. * (D / adaptive_bw[:, np.newaxis]) ** 2)
-
-        if output_onlylogp:
-            # return the kernel density estimate
-            return np.log(np.mean(C, axis=0).T) + logc
-        else:
-            return np.mean(C, axis=0).T
-
-
 @numba.njit()
 def local_svd(
         data,
