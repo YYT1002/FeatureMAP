@@ -50,8 +50,6 @@ import numba
 
 
 
-# from featuremap.core_transition_state import kernel_density_estimate
-
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
 from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
@@ -110,7 +108,6 @@ def _preprocess_data(X, min_samples=1000, random_state=42):
     else:
         vh = np.eye(X.shape[1])
     T2 = time.time()
-    # print(f'SVD decomposition time is {T2-T1}')
     return X, vh, n_original
 
 @numba.njit()
@@ -1255,8 +1252,6 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     verbose=False,
     tqdm_kwds=None,
     output_variation=False,
-    # original_data_flag=True,
-    # pca_vh=None
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1351,9 +1346,6 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     graph = graph.tocoo() #TODO: tocoo or toarray?
     head = graph.row
     tail = graph.col
-    # weight = graph.toarray() 
-    # weight = graph.data
-    # print(np.count_nonzero(weight, axis=1))
 
     graph.sum_duplicates()
     n_vertices = graph.shape[1]
@@ -1434,12 +1426,7 @@ def simplicial_set_embedding_with_tangent_space_embedding(
     T2 = time.time()
     if verbose:
         print(ts() + f' Tangent_space_approximation time is {T2-T1}')
-    
-    # if verbose:
-    #     print(ts() + " Project gauge to knn_graph")
-    # # Project the gauge to KNN graph to compute the transition probability matrix
-    # project_gauge_to_knn_graph(data, graph, featuremap_kwds=featuremap_kwds)
-   
+
     '''
     Variation embedding
     '''
@@ -1485,14 +1472,12 @@ def simplicial_set_embedding_with_tangent_space_embedding(
             mu_sum[k] += mu
         
         epsilon = 1e-8
-        # print('singular_values, ' + str(singular_values))
-        
+
         # Get the variance from singular values, corresponding to squared Euclidean distance
         singular_values = featuremap_kwds["Singular_value"].copy()
         ro_var = np.square(np.array(singular_values))
         ro = np.log(epsilon + ro_var) # radius in each directions of the hyper-ellipsoid
-        # print('ro, ' + str(ro))
-        
+
         std_ro = np.std(ro, axis=0)
         std_ro = np.where(std_ro == 0.0, 1.0, std_ro)
         R = (ro - np.mean(ro, axis=0)) / std_ro # normalization by column
@@ -1531,7 +1516,6 @@ def simplicial_set_embedding_with_tangent_space_embedding(
             negative_sample_rate,
             parallel=parallel,
             verbose=verbose,
-            # featuremap=featuremap,
             featuremap_kwds=featuremap_kwds,
             tqdm_kwds=tqdm_kwds,
             move_other=True,
@@ -1896,7 +1880,6 @@ class FeatureMAP(BaseEstimator):
         verbose=False,
         tqdm_kwds=None,
         unique=False,
-        # featuremap=False,
         feat_lambda=0.5,
         feat_frac=0.3,
         feat_gauge_coefficient = 1.0,
@@ -1917,8 +1900,6 @@ class FeatureMAP(BaseEstimator):
         gcn_elbow_stability=4,
         gcn_elbow_tolerance_steps=1,
         gcn_elbow_lookahead=2,
-        # original_data_flag=True,
-        # pca_vh=None
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1946,7 +1927,6 @@ class FeatureMAP(BaseEstimator):
         self.tqdm_kwds = tqdm_kwds
         self.unique = unique
 
-        # self.featuremap = featuremap
         self.feat_lambda = feat_lambda
         self.feat_frac = feat_frac
         self.feat_gauge_coefficient = feat_gauge_coefficient
@@ -1968,10 +1948,7 @@ class FeatureMAP(BaseEstimator):
         self.gcn_elbow_stability = gcn_elbow_stability
         self.gcn_elbow_tolerance_steps = gcn_elbow_tolerance_steps
         self.gcn_elbow_lookahead = gcn_elbow_lookahead
-        # self.original_data_flag = original_data_flag,
-        # self.pca_vh = pca_vh
-        
-        
+
         self.n_jobs = n_jobs
 
         self.a = a
@@ -2260,10 +2237,6 @@ class FeatureMAP(BaseEstimator):
             "gcn_elbow_tolerance_steps": self.gcn_elbow_tolerance_steps,
             "gcn_elbow_lookahead": self.gcn_elbow_lookahead,
         }
-        # if self.output_variation:
-        #     self._featuremap_kwds['threshold'] = self.threshold
-
-        # if self.featuremap:
         if self.output_metric not in ("euclidean", "l2"):
             raise ValueError(
                 "Non-Euclidean output metric not supported for FeatureMAP."
@@ -2332,15 +2305,6 @@ class FeatureMAP(BaseEstimator):
             or 'coo'.
         """
   
-        # # SVD decompostion of data 
-        # if X.shape[1] > 100:
-        #     if self.verbose:
-        #         print("Performing SVD decomposition on the data")
-        #     u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
-        #     X = np.matmul(u, np.diag(s))
-        # else:
-        #     vh = np.eye(X.shape[1])
-
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         self._raw_data = X
 
@@ -2359,9 +2323,6 @@ class FeatureMAP(BaseEstimator):
         self._initial_alpha = self.learning_rate
 
         self._validate_parameters()
-
-        # SVD decomposition of data
-        # self._featuremap_kwds['svd_vh'] = vh.T
 
         if self.verbose:
             print(str(self))
@@ -2406,7 +2367,6 @@ class FeatureMAP(BaseEstimator):
         else:
             index = list(range(X.shape[0]))
             inverse = list(range(X.shape[0]))
-        # print('inverse, ' +  str(inverse))
         # Error check n_neighbors based on data size
         if X[index].shape[0] <= self.n_neighbors:
             if X[index].shape[0] == 1:
@@ -2443,7 +2403,6 @@ class FeatureMAP(BaseEstimator):
             # nearest neighbors. To make this easier, we expect matrices that are
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
-            # print("Computing KNNs for sparse precomputed distances...")
             if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
@@ -2474,7 +2433,6 @@ class FeatureMAP(BaseEstimator):
                 self.graph_,
                 self._sigmas,
                 self._rhos,
-                # self.graph_dists_,
             ) = fuzzy_simplicial_set(
                 X[index],
                 self.n_neighbors,
@@ -2488,8 +2446,6 @@ class FeatureMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
-                # self.output_feat,
-
             )
             # Report the number of vertices with degree 0 in our our self.graph_
             # This ensures that they were properly disconnected.
@@ -2540,18 +2496,13 @@ class FeatureMAP(BaseEstimator):
             # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
             edges_removed = np.sum(dmat >= self._disconnection_distance)
             dmat[dmat >= self._disconnection_distance] = np.inf
-            # print(dmat.shape)
-            # print(dmat[:2, :])
             self._knn_dists = np.sort(dmat, axis=1)
             self._knn_indices = np.argsort(dmat, axis=1)
-            # print( self._knn_dists[:2, :])
-            # print( self._knn_indices[:2, :])
-            
+
             (
                 self.graph_,
                 self._sigmas,
                 self._rhos,
-                # self.graph_dists_,
             ) = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -2565,8 +2516,6 @@ class FeatureMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
-                # self.output_feat,
-
             )
             # Report the number of vertices with degree 0 in our our self.graph_
             # This ensures that they were properly disconnected.
@@ -2618,7 +2567,6 @@ class FeatureMAP(BaseEstimator):
                 self.graph_,
                 self._sigmas,
                 self._rhos,
-                # self.graph_dists_,
             ) = fuzzy_simplicial_set(
                 X[index],
                 self.n_neighbors,
@@ -2632,8 +2580,6 @@ class FeatureMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
-                # self.output_feat,
-
             )
             # Report the number of vertices with degree 0 in our our self.graph_
             # This ensures that they were properly disconnected.
@@ -2648,10 +2594,7 @@ class FeatureMAP(BaseEstimator):
                 verbose=self.verbose,
             )
 
-        # if self.featuremap or self.output_feat:
-        # self._featuremap_kwds["graph_dists"] = self.graph_dists_
         self._featuremap_kwds["n_neighbors"] = self.n_neighbors
-        # self._featuremap_kwds["n_neighbors_in_guage"] = self.n_neighbors # TODO: n_neighbors_in_guage same as n_neighbors or not
         self._featuremap_kwds["_knn_indices"] = self._knn_indices
 
         if self.verbose:
@@ -2661,11 +2604,9 @@ class FeatureMAP(BaseEstimator):
             self.embedding_ = self._fit_embed_data(
                 self._raw_data[index],
                 self.n_epochs,
-                # self.featuremap,
                 init,
-                random_state,  
+                random_state,
             )
-            # print('aux_data, ' + str(aux_data))
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
             # They also prevent users from being deceived a distance query to one of these points.
@@ -2677,9 +2618,6 @@ class FeatureMAP(BaseEstimator):
                 )
 
             self.embedding_ = self.embedding_[inverse]
-            # if self.output_feat:
-            #     self.rad_orig_ = aux_data["rad_orig"][inverse]
-            #     self.rad_emb_ = aux_data["rad_emb"][inverse]
 
         self._featuremap_kwds["X_embedding"] = self.embedding_
         if self.verbose:
@@ -2694,7 +2632,6 @@ class FeatureMAP(BaseEstimator):
         """A method wrapper for simplicial_set_embedding that can be
         replaced by subclasses.
         """
-        # if featuremap:
         return simplicial_set_embedding_with_tangent_space_embedding(
             X,
             self.graph_,
@@ -2709,7 +2646,6 @@ class FeatureMAP(BaseEstimator):
             random_state,
             self._input_distance_func,
             self._metric_kwds,
-            # self.featuremap,
             self._featuremap_kwds,
             self.output_feat,
             self._output_distance_func,
@@ -2885,8 +2821,7 @@ def _optimize_layout_euclidean_single_epoch_grad(
     feat_mu,
     feat_mu_tot,
     
-):  
-    # print('epochs_per_sample.shape[0]' + str(epochs_per_sample.shape[0]))
+):
     for i in numba.prange(epochs_per_sample.shape[0]):
         if epoch_of_next_sample[i] <= n:
             j = head[i]
@@ -2902,11 +2837,7 @@ def _optimize_layout_euclidean_single_epoch_grad(
             outer_product = np.outer(vec_diff, vec_diff)
             
             grad_d = np.zeros(dim, dtype=np.float32)
-            
-            #dim = 1
-            # random select a dimension from dim
-            # d = tau_rand_int(rng_state) % dim
-            # print('featuremap_flag' + str(featuremap_flag))
+
             if featuremap_flag:
                 current_VH = feat_VH_embedding[j] # rotation matrix embedding;  
                 other_VH = feat_VH_embedding[k]
@@ -3145,7 +3076,6 @@ def optimize_layout_euclidean_anisotropic_projection(
     negative_sample_rate=5.0,
     parallel=False,
     verbose=False,
-    # featuremap=False,
     featuremap_kwds=None,
     tqdm_kwds=None,
     move_other=False,
@@ -3255,48 +3185,29 @@ def optimize_layout_euclidean_anisotropic_projection(
     feat_phi_sum = np.zeros(n_vertices, dtype=np.float32) # For each node i in embedding space, sum of edge existing probality incident to this node
     feat_re_sum = np.zeros([n_vertices, dim], dtype=np.float32) # Embedding radius in principal directions
     feat_var_shift = featuremap_kwds["var_shift"]
-    # else: 
-    #     feat_mu_tot = 0
-    #     feat_lambda = 0
-    #     feat_R = np.zeros(1, dtype=np.float32)
-    #     feat_VH = np.zeros(1, dtype=np.float32)
-    #     feat_VH_embedding = np.zeros(1, dtype=np.float32)
-    #     # feat_rotation_angle = np.zeros(1, dtype=np.float32)
-    #     feat_mu = np.zeros(1, dtype=np.float32)
-    #     feat_phi_sum = np.zeros(1, dtype=np.float32)
-    #     feat_re_sum = np.zeros(1, dtype=np.float32)
-        
+
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
     
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         featuremap_flag = (
-            # featuremap and 
             (featuremap_kwds["lambda"] > 0)
             and (((n + 1) / float(n_epochs)) > (1 - featuremap_kwds["frac"]))
         )
 
         if featuremap_flag:
-            # Compute the initial embedding under rotation VH
-            # T1 = time.time()
             feat_init_fn(
                 head_embedding,
                 tail_embedding,
                 head,
                 tail,
-                # random_state,
-                # feat_VH,
                 feat_VH_embedding,
                 a,
                 b,
                 feat_re_sum,
                 feat_phi_sum,
             )
-            # T2 = time.time()
-            # print(f'featuremap initialization time is {T2-T1}')
-              
-            # feat_init_fn.inspect_types()
-            
+
             # FIXME: feat_var_shift might be referenced before assignment
             feat_re_std = np.sqrt(np.var(feat_re_sum, axis=0) + feat_var_shift)
             feat_re_mean = np.mean(feat_re_sum, axis=0)
@@ -3309,13 +3220,6 @@ def optimize_layout_euclidean_anisotropic_projection(
             feat_re_mean = np.zeros(dim, dtype=np.float32)
             feat_re_cov = np.zeros(dim, dtype=np.float32)
 
-        # # recover the gauge from the low dimensional embedding
-        # if featuremap_flag and n % 10 == 0:
-        #     # print('recover gauge from embedding')
-        #     recover_gauge_from_embedding(data_embedding=head_embedding, featuremap_kwds=featuremap_kwds)
-        #     feat_VH_embedding = featuremap_kwds["VH_embedding"].astype(np.float32)
-
-        # T1 = time.time()
         optimize_fn(
             head_embedding,
             tail_embedding,
@@ -3347,8 +3251,6 @@ def optimize_layout_euclidean_anisotropic_projection(
             feat_mu_tot,
         )
 
-        # T2 = time.time()
-        # print(f'Optimize_fn time is {T2-T1}')
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-        
+
     return head_embedding
