@@ -73,7 +73,7 @@ DISCONNECTION_DISTANCES = {
 
 
 # Preprocess the data by singular value decomposition
-def _preprocess_data(X, min_samples=1000, random_state=42):
+def _preprocess_data(X, min_samples=1000, random_state=42, verbose=False):
     X = np.asarray(X, dtype=np.float64)
     n_original = X.shape[0]
 
@@ -91,23 +91,24 @@ def _preprocess_data(X, min_samples=1000, random_state=42):
             size=(n_synthetic, X.shape[1]),
         )
         X = np.concatenate([X, synthetic], axis=0)
-        print(
-            f"Augmented {n_original} samples to {X.shape[0]} by adding "
-            f"{n_synthetic} Gaussian synthetic samples matched to feature mean/std"
-        )
+        if verbose:
+            print(
+                f"Augmented {n_original} samples to {X.shape[0]} by adding "
+                f"{n_synthetic} Gaussian synthetic samples matched to feature mean/std"
+            )
 
-    T1 = time.time()
     if X.shape[1] > 100 and X.shape[0] > 100:
-        print("Performing SVD decomposition on the data")
+        if verbose:
+            print("Performing SVD decomposition on the data")
         u, s, vh = scipy.sparse.linalg.svds(X, k=100, which='LM', random_state=42)
         X = np.matmul(u, np.diag(s))
     elif X.shape[1] > 100 and X.shape[0] < 100:
-        print(int(X.shape[0]-1))
+        if verbose:
+            print(int(X.shape[0]-1))
         u, s, vh = scipy.sparse.linalg.svds(X, k=int(X.shape[0]-1), which='LM', random_state=42)
         X = np.matmul(u, np.diag(s))
     else:
         vh = np.eye(X.shape[1])
-    T2 = time.time()
     return X, vh, n_original
 
 @numba.njit()
