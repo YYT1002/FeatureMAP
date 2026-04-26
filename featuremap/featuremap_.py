@@ -174,9 +174,6 @@ def local_svd(
 
 
 
-import time
-
-
 def _align_frame_rows_to_reference(reference_frame, frame):
     """Align a k-frame to a reference k-frame with an orthogonal Procrustes step."""
     cross_cov = reference_frame @ frame.T
@@ -2782,9 +2779,6 @@ class FeatureMAP(BaseEstimator):
 
 
 
-import numpy as np
-import numba
-import umap.distances as dist
 from umap.utils import tau_rand_int
 from tqdm.auto import tqdm
 
