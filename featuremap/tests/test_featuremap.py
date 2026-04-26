@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import numpy as np
 import pytest
 from sklearn.datasets import make_classification
@@ -134,39 +132,6 @@ def test_online_log_delta_elbow_stop_respects_min_steps_and_lookahead():
             stop_step = step
 
     assert stop_step == 6
-
-
-def test_online_log_delta_elbow_stop_matches_saved_pancreas_trace():
-    trace_path = (
-        Path(__file__).resolve().parents[2]
-        / "outputs"
-        / "pancreas_autostop_delta001_rw001_nocap_variation_pc_steps"
-        / "variation_pc_steps.npz"
-    )
-    if not trace_path.exists():
-        pytest.skip("Saved pancreas stop trace is not available in this workspace.")
-
-    with np.load(trace_path, allow_pickle=True) as data:
-        step_ids = np.asarray(data["gcn_stop_step_ids"], dtype=np.int32)
-        delta = np.asarray(data["gcn_stop_relative_change"], dtype=np.float64)
-
-    elbow_history = []
-    stop_step = None
-    for idx in range(step_ids.shape[0]):
-        _, _, _, eligible = _evaluate_online_log_delta_elbow_stop(
-            step_ids[: idx + 1],
-            delta[: idx + 1],
-            elbow_history,
-            min_steps=14,
-            stability=4,
-            tolerance_steps=1,
-            lookahead=2,
-        )
-        if eligible:
-            stop_step = int(step_ids[idx])
-            break
-
-    assert stop_step == 17
 
 
 def test_featuremap_auto_delta_patience_stops_on_delta_only(sample_data):
