@@ -40,11 +40,7 @@ from umap.utils import (
 from umap.spectral import spectral_layout
 
 
-try:
-    import joblib
-except ImportError:
-    # sklearn.externals.joblib is deprecated in 0.21, will be removed in 0.23
-    from sklearn.externals import joblib
+import joblib
 
 import numpy as np
 import scipy.sparse
