@@ -153,67 +153,6 @@ def test_featuremap_auto_delta_patience_stops_on_delta_only(sample_data):
     assert kwds["gcn_stop_mode"] == "auto_delta_patience"
     assert int(kwds["gcn_chosen_iteration"]) == 2
     assert kwds["variation_pc_steps"].shape[0] == 3
-    assert "gcn_stop_rw_tol" not in kwds
-    assert "gcn_stop_rw_residual" not in kwds
-
-
-def test_featuremap_auto_hybrid_rw_warns_and_matches_auto_delta_patience(sample_data):
-    expected = FeatureMAP(
-        n_components=2,
-        n_neighbors=5,
-        random_state=42,
-        output_variation=True,
-        collect_variation_pc_steps=True,
-        gcn_stop_mode="auto_delta_patience",
-        gcn_stop_delta_tol=10.0,
-        gcn_stop_patience=2,
-        gcn_max_iterations=4,
-    )
-    expected.fit_transform(sample_data)
-
-    alias = FeatureMAP(
-        n_components=2,
-        n_neighbors=5,
-        random_state=42,
-        output_variation=True,
-        collect_variation_pc_steps=True,
-        gcn_stop_mode="auto_hybrid_rw",
-        gcn_stop_delta_tol=10.0,
-        gcn_stop_patience=2,
-        gcn_max_iterations=4,
-    )
-    with pytest.warns(UserWarning, match="auto_hybrid_rw"):
-        alias.fit_transform(sample_data)
-
-    alias_kwds = alias._featuremap_kwds
-    expected_kwds = expected._featuremap_kwds
-
-    assert alias_kwds["gcn_stop_mode"] == "auto_delta_patience"
-    assert int(alias_kwds["gcn_chosen_iteration"]) == int(expected_kwds["gcn_chosen_iteration"]) == 2
-    assert "gcn_stop_rw_tol" not in alias_kwds
-    assert np.allclose(alias_kwds["variation_pc_steps"], expected_kwds["variation_pc_steps"])
-
-
-def test_featuremap_gcn_stop_rw_tol_warns_and_is_ignored(sample_data):
-    featuremap = FeatureMAP(
-        n_components=2,
-        n_neighbors=5,
-        random_state=42,
-        output_variation=True,
-        collect_variation_pc_steps=True,
-        gcn_stop_mode="auto_delta_patience",
-        gcn_stop_delta_tol=10.0,
-        gcn_stop_rw_tol=1e-12,
-        gcn_stop_patience=2,
-        gcn_max_iterations=4,
-    )
-    with pytest.warns(UserWarning, match="gcn_stop_rw_tol"):
-        featuremap.fit_transform(sample_data)
-
-    kwds = featuremap._featuremap_kwds
-
-    assert int(kwds["gcn_chosen_iteration"]) == 2
-    assert "gcn_stop_rw_tol" not in kwds
     assert "gcn_stop_rw_residual" not in kwds
 
 

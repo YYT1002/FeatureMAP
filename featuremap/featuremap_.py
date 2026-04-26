@@ -714,8 +714,6 @@ def tangent_space_approximation(
     threshold = featuremap_kwds["threshold"]
     collect_variation_pc_steps = bool(featuremap_kwds.get("collect_variation_pc_steps", False))
     gcn_stop_mode = featuremap_kwds.get("gcn_stop_mode", "auto_delta_patience")
-    if gcn_stop_mode == "auto_hybrid_rw":
-        gcn_stop_mode = "auto_delta_patience"
     gcn_stop_delta_tol = float(featuremap_kwds.get("gcn_stop_delta_tol", 0.01))
     gcn_stop_patience = int(featuremap_kwds.get("gcn_stop_patience", 2))
     gcn_elbow_min_steps = int(featuremap_kwds.get("gcn_elbow_min_steps", 14))
@@ -1827,9 +1825,6 @@ class FeatureMAP(BaseEstimator):
         Relative Frobenius-norm tolerance on consecutive ``variation_pc`` updates for the
         ``"auto_delta_patience"`` stop mode.
 
-    gcn_stop_rw_tol: float or None (optional, default None)
-        Deprecated and ignored. Passing a value emits a warning and has no effect.
-
     gcn_stop_patience: int (optional, default 2)
         Number of consecutive eligible steps required before graph smoothing stops early in
         the ``"auto_delta_patience"`` mode.
@@ -1895,7 +1890,6 @@ class FeatureMAP(BaseEstimator):
         collect_variation_pc_steps=False,
         gcn_stop_mode="auto_delta_patience",
         gcn_stop_delta_tol=0.01,
-        gcn_stop_rw_tol=None,
         gcn_stop_patience=2,
         gcn_elbow_min_steps=14,
         gcn_elbow_stability=4,
@@ -1943,7 +1937,6 @@ class FeatureMAP(BaseEstimator):
         self.collect_variation_pc_steps = collect_variation_pc_steps
         self.gcn_stop_mode = gcn_stop_mode
         self.gcn_stop_delta_tol = gcn_stop_delta_tol
-        self.gcn_stop_rw_tol = gcn_stop_rw_tol
         self.gcn_stop_patience = gcn_stop_patience
         self.gcn_elbow_min_steps = gcn_elbow_min_steps
         self.gcn_elbow_stability = gcn_elbow_stability
@@ -2163,28 +2156,12 @@ class FeatureMAP(BaseEstimator):
             if int(self.gcn_align_top_k) < 0:
                 raise ValueError("gcn_align_top_k cannot be negative")
             self.gcn_align_top_k = int(self.gcn_align_top_k)
-        if self.gcn_stop_mode == "auto_hybrid_rw":
-            warn(
-                "`auto_hybrid_rw` is deprecated; use `auto_delta_patience` instead.",
-                UserWarning,
-            )
-            self.gcn_stop_mode = "auto_delta_patience"
         if self.gcn_stop_mode not in ("auto_delta_patience", "auto_elbow_log_delta"):
             raise ValueError(
                 'gcn_stop_mode must be "auto_delta_patience" or "auto_elbow_log_delta"'
             )
         if self.gcn_stop_delta_tol < 0.0:
             raise ValueError("gcn_stop_delta_tol cannot be negative")
-        if self.gcn_stop_rw_tol is not None:
-            if not isinstance(self.gcn_stop_rw_tol, (int, float, np.integer, np.floating)):
-                raise ValueError("gcn_stop_rw_tol must be a nonnegative number or None")
-            if float(self.gcn_stop_rw_tol) < 0.0:
-                raise ValueError("gcn_stop_rw_tol cannot be negative")
-            warn(
-                "`gcn_stop_rw_tol` is deprecated and ignored; graph smoothing no longer uses rw in stopping.",
-                UserWarning,
-            )
-            self.gcn_stop_rw_tol = None
         if not isinstance(self.gcn_stop_patience, (int, np.integer)):
             raise ValueError("gcn_stop_patience must be a positive integer")
         if int(self.gcn_stop_patience) < 1:
