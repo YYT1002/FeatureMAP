@@ -1,3 +1,5 @@
+
+
 ![FeatureMAP Illustration](./docs/figures/featureMAP.png)
 
 # FeatureMAP: Feature-preserving Manifold Approximation and Projection
@@ -67,7 +69,7 @@ x_emb = featuremap.FeatureMAP(output_variation=False).fit_transform(data)
 output_variation: bool (False by default). Decide to generate expression embedding or variation embedding. 
 
 #### Outputs
-x_emb: expession embedding to show the clustering
+x_emb: expression embedding to show the clustering
 
 v_emb: variation embedding to show the trajectory
 
@@ -84,4 +86,3 @@ Yang, Yang, et al. "Interpretable dimensionality reduction by feature preserving
 
 ## License
 The FeatureMAP package is under BSD-3-Clause license.
-
