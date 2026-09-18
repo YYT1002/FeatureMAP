@@ -172,3 +172,6 @@ featuremap/tcga_states.py
 featuremap/tests/test_tcga_states.py
 featuremap/stemness.py
 featuremap/tests/test_stemness.py
+
+# macOS
+.DS_Store
