@@ -526,9 +526,9 @@ def graph_convolution(
             Returning a truthy value stops the convolution early.
 
     Returns:
-        np.ndarray: Smoothed feature matrix after the completed smoothing iterations.
-        dict: Dictionary storing the first averaged result under the key "VH" and
-            iteration metadata under ``completed_iterations`` and ``stopped_early``.
+        tuple[np.ndarray, dict]: Smoothed feature matrix and a dictionary storing
+            the first averaged result under "VH" and iteration metadata under
+            ``completed_iterations`` and ``stopped_early``.
     """
     if verbose:
         if num_iterations is None:
@@ -3063,6 +3063,7 @@ def optimize_layout_euclidean_anisotropic_projection(
     and low dimensional fuzzy simplicial sets. In practice this is done by
     sampling edges based on their membership strength (with the (1-p) terms
     coming from negative sampling similar to word2vec).
+
     Parameters
     ----------
     head_embedding: array of shape (n_samples, n_components)
