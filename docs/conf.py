@@ -6,8 +6,8 @@ project = 'FeatureMap'
 copyright = '2024, Yang Yang'
 author = 'Yang Yang'
 
-release = '0.1'
-version = '0.1.0'
+release = '0.0.5'
+version = '0.0.5'
 
 # -- General configuration
 
@@ -40,10 +40,14 @@ autoapi_options = [
     'show-inheritance',
     'show-module-summary',
     'special-members',
-    'imported-members',
 ]
 
 autoapi_root = 'autoapi'
+# AutoAPI cannot statically resolve the UMAP function re-exported by featuremap_.
+suppress_warnings = ['autoapi.python_import_resolution']
+
+# The tutorials include saved results; building the site must not rerun analyses.
+nbsphinx_execute = 'never'
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
@@ -54,13 +58,8 @@ intersphinx_disabled_domains = ['std']
 templates_path = ['_templates']
 
 # -- Options for HTML output
-import os
-
-
 html_theme = 'sphinx_rtd_theme'
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-html_static_path = ['_static', os.path.join(BASE_DIR, 'figures'), '_images']
-html_extra_path = [os.path.join(BASE_DIR, 'figures')]
+html_extra_path = ['figures']
 
 
 # -- Options for EPUB output

@@ -42,7 +42,8 @@ FeatureMAP, a feature-preserving method, enhances the visualization and interpre
 ### Dependencies
 
 - Python 3.8 or higher
-- Required Python libraries: numpy, scipy, matplotlib, umap-learn, scikit-learn
+- Core dependencies: numpy, scipy, numba, umap-learn, scikit-learn
+- For the analysis tutorials: `pip install "featuremap[features]"` plus `phate`, `networkx`, and `seaborn` where used
 - Operating System: Any (Windows, macOS, Linux)
 
 ### Installation
@@ -56,12 +57,14 @@ pip install featuremap
 ## How to use FeatureMAP
 
 ### Data Visualization
-To apply FeatureMAP in Python with a data matrix (data), where rows represent cells and columns represent genes, use the following command:
-```
+To apply FeatureMAP to a data matrix whose rows represent cells and columns represent features:
+```python
+from sklearn.datasets import make_blobs
 import featuremap
-v_emb = featuremap.FeatureMAP(output_variation=True).fit_transform(data)
-x_emb = featuremap.FeatureMAP(output_variation=False).fit_transform(data)
 
+data, _ = make_blobs(n_samples=120, n_features=8, random_state=42)
+x_emb = featuremap.FeatureMAP(output_variation=False, random_state=42).fit_transform(data)
+v_emb = featuremap.FeatureMAP(output_variation=True, random_state=42).fit_transform(data)
 
 ```
 
@@ -78,7 +81,7 @@ v_emb: variation embedding to show the trajectory
 More tutorials are at https://featuremap.readthedocs.io/en/latest/index.html.
 
 ## Citation
-Our FeatureMAP alogrithm is based on the paper
+Our FeatureMAP algorithm is described in the paper:
 
 Yang, Y., Gong, J., Sun, H. et al. Feature-preserving manifold approximation and projection to analyze single-cell data. Nat Comput Sci (2026). https://doi.org/10.1038/s43588-026-00970-6
 
